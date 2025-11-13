@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "seed": "ts-node scripts/seed.ts",
+    "seed:sql": "psql $DATABASE_URL -f scripts/seed.sql",
+    "seed:reset": "npm run migrate:reset && npm run seed",
+    "seed:deterministic": "SEED_DETERMINISTIC=12345 npm run seed"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.0.0",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.0.0",
+    "pg": "^8.11.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}

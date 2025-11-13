@@ -1,0 +1,107 @@
+.PHONY: help dev dev-down dev-reset health logs logs-api logs-frontend test clean install
+
+# Default target
+.DEFAULT_GOAL := help
+
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Available targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+dev: ## Start the development environment
+	@echo "🚀 Starting development environment..."
+	@./scripts/dev-up.sh
+
+dev-down: ## Stop and clean up the development environment
+	@echo "🛑 Stopping development environment..."
+	@./scripts/dev-down.sh
+
+dev-reset: dev-down dev ## Reset the development environment (stop and restart)
+	@echo "🔄 Environment reset complete"
+
+health: ## Check health of all services
+	@./scripts/health-check.sh
+
+logs: ## Follow logs from all services
+	@docker-compose logs -f
+
+logs-api: ## Follow logs from API service only
+	@docker-compose logs -f api
+
+logs-frontend: ## Follow logs from frontend service only
+	@docker-compose logs -f frontend
+
+logs-db: ## Follow logs from database service only
+	@docker-compose logs -f postgres
+
+test: ## Run tests
+	@echo "🧪 Running tests..."
+	@docker-compose exec -T api npm test
+
+test-watch: ## Run tests in watch mode
+	@echo "🧪 Running tests in watch mode..."
+	@docker-compose exec api npm run test:watch
+
+lint: ## Run linters
+	@echo "🔍 Running linters..."
+	@docker-compose exec -T api npm run lint
+	@docker-compose exec -T frontend npm run lint
+
+format: ## Format code
+	@echo "✨ Formatting code..."
+	@docker-compose exec -T api npm run format
+	@docker-compose exec -T frontend npm run format
+
+db-migrate: ## Run database migrations
+	@echo "📊 Running database migrations..."
+	@docker-compose exec -T api npm run migrate
+
+db-seed: ## Seed database with test data
+	@echo "🌱 Seeding database..."
+	@docker-compose exec -T api npm run seed
+
+db-reset: ## Reset database (drop, migrate, seed)
+	@echo "🔄 Resetting database..."
+	@docker-compose exec -T api npm run db:reset
+
+shell-api: ## Open shell in API container
+	@docker-compose exec api sh
+
+shell-frontend: ## Open shell in frontend container
+	@docker-compose exec frontend sh
+
+shell-db: ## Open PostgreSQL shell
+	@docker-compose exec postgres psql -U $(DB_USER) -d $(DB_NAME)
+
+install: ## Install dependencies (run after git pull)
+	@echo "📦 Installing dependencies..."
+	@docker-compose exec -T api npm install
+	@docker-compose exec -T frontend npm install
+
+clean: dev-down ## Clean up everything (containers, volumes, images)
+	@echo "🧹 Cleaning up..."
+	@docker-compose down -v --rmi local
+	@rm -rf backend/node_modules frontend/node_modules
+	@echo "✅ Cleanup complete"
+
+ps: ## Show running containers
+	@docker-compose ps
+
+stats: ## Show container resource usage
+	@docker stats $$(docker-compose ps -q)
+
+# Skill Integration Targets
+
+git-hooks-setup: ## Set up Git hooks (requires git-hooks skill)
+	@./scripts/setup-git-hooks.sh
+
+ssl-setup: ## Set up local SSL (requires local-ssl skill)
+	@./scripts/setup-ssl.sh
+
+db-seed-setup: ## Set up database seeding (requires database-seeding skill)
+	@npm install --save-dev @faker-js/faker
+	@echo "✅ Database seeding dependencies installed"
+
+env-setup: ## Create environment profiles (requires env-manager skill)
+	@./scripts/create-env-profiles.sh
