@@ -1,0 +1,8 @@
+{
+  "name": "dev-skills-plugin",
+  "description": "Complete developer environment setup and automation toolkit with 6 essential skills",
+  "version": "1.0.0",
+  "author": {
+    "name": "Casey"
+  }
+}

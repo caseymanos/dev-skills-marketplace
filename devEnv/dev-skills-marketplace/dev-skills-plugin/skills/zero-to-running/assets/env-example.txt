@@ -1,0 +1,45 @@
+# Zero-to-Running Development Environment Configuration
+# Copy this file to .env and adjust values as needed
+
+# Service Ports
+FRONTEND_PORT=3000
+API_PORT=8000
+POSTGRES_PORT=5432
+REDIS_PORT=6379
+
+# Database Configuration (Development Only)
+DB_NAME=dev_db
+DB_USER=dev_user
+DB_PASSWORD=dev_password_change_in_production
+
+# Redis Configuration
+REDIS_PASSWORD=
+
+# Application Settings
+NODE_ENV=development
+LOG_LEVEL=debug
+
+# Feature Flags
+ENABLE_HOT_RELOAD=true
+ENABLE_DEBUG_MODE=true
+ENABLE_SOURCE_MAPS=true
+
+# API Configuration
+API_TIMEOUT=30000
+API_RATE_LIMIT=100
+
+# Frontend Configuration
+VITE_API_URL=http://localhost:8000
+VITE_APP_NAME=Zero-to-Running App
+
+# Security (Development Only - NEVER use these in production)
+JWT_SECRET=dev_secret_change_in_production
+SESSION_SECRET=dev_session_secret_change_in_production
+
+# Optional: Database Seeding
+SEED_DATABASE=true
+SEED_DATA_PATH=./data/seed.json
+
+# Optional: Performance Monitoring
+ENABLE_PROFILING=false
+ENABLE_METRICS=true
