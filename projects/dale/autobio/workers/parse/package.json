@@ -10,6 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.1",
     "@autobiography/types": "workspace:*",
+    "@google/generative-ai": "^0.24.1",
     "jszip": "^3.10.1",
     "pdfjs-dist": "^5.4.449"
   },

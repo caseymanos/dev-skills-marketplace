@@ -1,5 +1,5 @@
 import type { ParseFileMessage } from '@autobiography/types';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface Env {
   DB: D1Database;
@@ -7,7 +7,7 @@ interface Env {
   ANALYZE_QUEUE: Queue;
   PROGRESS_TRACKER: DurableObjectNamespace;
   ENVIRONMENT: string;
-  CLAUDE_API_KEY: string;
+  GEMINI_API_KEY: string;
 }
 
 // Constants
@@ -222,7 +222,7 @@ async function parseZipFile(
           },
         });
       } else if (ext === 'pdf') {
-        // Parse PDF using hybrid approach: pdf.js first, Claude Haiku fallback
+        // Parse PDF using Gemini 2.0 Flash (cheap & fast)
         const pdfData = await file.async('arraybuffer');
         const pdfSizeMB = pdfData.byteLength / (1024 * 1024);
 
@@ -237,62 +237,35 @@ async function parseZipFile(
           });
         } else {
           try {
-            // Step 1: Try pdf.js extraction first (free, instant)
-            const pdfText = await extractWithPdfJs(pdfData);
+            const useAdvanced = isComplexPdf(path, pdfSizeMB);
+            const modelName = useAdvanced ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
+            console.log(`Processing PDF ${path} (${pdfSizeMB.toFixed(2)}MB) from archive with ${modelName}...`);
 
-            if (pdfText && pdfText.length > 100) {
-              console.log(`pdf.js extracted ${pdfText.length} chars from ${path} in archive`);
-              results.push({
-                type: 'text',
-                text: pdfText.slice(0, MAX_TEXT_LENGTH),
-                metadata: {
-                  filename: path,
-                  confidence_score: 0.95,
+            const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const base64Data = arrayBufferToBase64(pdfData);
+
+            const result = await model.generateContent([
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: base64Data,
                 },
-              });
-            } else {
-              // Step 2: Fall back to Claude Haiku for scanned PDFs
-              console.log(`Using Claude Haiku for ${path} in archive...`);
-              const base64Data = arrayBufferToBase64(pdfData);
-              const anthropic = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
+              },
+              { text: 'Extract all text content from this document. Return ONLY the extracted text content.' },
+            ]);
 
-              const response = await anthropic.messages.create({
-                model: 'claude-3-haiku-20240307', // Fast & cheap for OCR
-                max_tokens: 4096,
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      {
-                        type: 'document',
-                        source: {
-                          type: 'base64',
-                          media_type: 'application/pdf',
-                          data: base64Data,
-                        },
-                      },
-                      {
-                        type: 'text',
-                        text: `Extract all text content from this document. Return ONLY the extracted text content.`,
-                      },
-                    ],
-                  },
-                ],
-              });
+            const extractedText = result.response.text();
+            console.log(`Extracted ${extractedText.length} chars from ${path}`);
 
-              const extractedText = response.content[0].type === 'text'
-                ? response.content[0].text
-                : '';
-
-              results.push({
-                type: 'text',
-                text: extractedText.slice(0, MAX_TEXT_LENGTH),
-                metadata: {
-                  filename: path,
-                  confidence_score: 0.8,
-                },
-              });
-            }
+            results.push({
+              type: 'text',
+              text: extractedText.slice(0, MAX_TEXT_LENGTH),
+              metadata: {
+                filename: path,
+                confidence_score: useAdvanced ? 0.95 : 0.9,
+              },
+            });
           } catch (error) {
             console.error(`Error processing PDF ${path} from archive:`, error);
             results.push({
@@ -332,54 +305,30 @@ async function parseImage(
   ];
 }
 
-// Extract text from PDF using pdf.js (free, instant)
-async function extractWithPdfJs(arrayBuffer: ArrayBuffer): Promise<string> {
-  try {
-    // Dynamic import for Cloudflare Workers compatibility
-    const pdfjsLib = await import('pdfjs-dist');
+// Determine if PDF needs advanced processing (Gemini 3 Flash) or basic (Gemini 2.0 Flash)
+function isComplexPdf(filename: string, sizeMB: number): boolean {
+  const complexIndicators = [
+    'scan', 'handwrit', 'letter', 'journal', 'diary', 'note',
+    'contract', 'legal', 'form', 'certificate', 'photo'
+  ];
+  const lowerName = filename.toLowerCase();
 
-    // Create a typed array view for pdf.js
-    const data = new Uint8Array(arrayBuffer);
+  // Complex if: large file, or filename suggests scanned/handwritten content
+  if (sizeMB > 5) return true;
+  if (complexIndicators.some(ind => lowerName.includes(ind))) return true;
 
-    // Load the PDF document
-    const loadingTask = pdfjsLib.getDocument({ data });
-    const pdf = await loadingTask.promise;
-
-    let fullText = '';
-
-    // Extract text from each page
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => {
-          // TextItem has 'str', TextMarkedContent doesn't
-          if ('str' in item && typeof item.str === 'string') {
-            return item.str;
-          }
-          return '';
-        })
-        .join(' ');
-      fullText += pageText + '\n';
-    }
-
-    return fullText.trim();
-  } catch (error) {
-    console.warn('pdf.js extraction failed:', error);
-    return '';
-  }
+  return false;
 }
 
-// Parse PDF file using hybrid approach: pdf.js first, Claude Haiku fallback
+// Parse PDF using Gemini - routes to 2.0 Flash (cheap) or 3 Flash (complex docs)
 async function parsePdf(
   r2Object: R2ObjectBody,
   filename: string,
   env: Env
 ): Promise<ParsedResult[]> {
   const arrayBuffer = await r2Object.arrayBuffer();
-
-  // Check file size limit (32MB for Claude PDF processing)
   const sizeMB = arrayBuffer.byteLength / (1024 * 1024);
+
   if (sizeMB > MAX_PDF_SIZE_MB) {
     console.warn(`PDF ${filename} exceeds ${MAX_PDF_SIZE_MB}MB limit (${sizeMB.toFixed(2)}MB)`);
     return [{
@@ -392,60 +341,38 @@ async function parsePdf(
     }];
   }
 
-  // Step 1: Try pdf.js extraction first (free, instant)
-  console.log(`Attempting pdf.js extraction for ${filename}...`);
-  const pdfText = await extractWithPdfJs(arrayBuffer);
+  // Route to appropriate model
+  const useAdvanced = isComplexPdf(filename, sizeMB);
+  const modelName = useAdvanced ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
+  // Note: Using 2.0 Flash for both initially since 3 Flash may not be in API yet
+  // Change to 'gemini-3-flash' when available
 
-  // If we got substantial text content, use it
-  if (pdfText && pdfText.length > 100) {
-    console.log(`pdf.js extracted ${pdfText.length} chars from ${filename}`);
-    return [{
-      type: 'text',
-      text: pdfText.slice(0, MAX_TEXT_LENGTH),
-      metadata: {
-        filename,
-        confidence_score: 0.95,
-      },
-    }];
-  }
-
-  // Step 2: Fall back to Claude Haiku for scanned/image PDFs (fast, cheap)
-  console.log(`pdf.js found minimal text, using Claude Haiku for ${filename}...`);
-  const base64Data = arrayBufferToBase64(arrayBuffer);
+  console.log(`Processing PDF ${filename} (${sizeMB.toFixed(2)}MB) with ${modelName}...`);
 
   try {
-    const anthropic = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
+    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: modelName });
 
-    const response = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307', // Fast & cheap for OCR
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: base64Data,
-              },
-            },
-            {
-              type: 'text',
-              text: `Extract all text content from this document. Return ONLY the extracted text content, no commentary.`,
-            },
-          ],
+    // Convert to base64 for Gemini
+    const base64Data = arrayBufferToBase64(arrayBuffer);
+
+    const result = await model.generateContent([
+      {
+        inlineData: {
+          mimeType: 'application/pdf',
+          data: base64Data,
         },
-      ],
-    });
+      },
+      { text: 'Extract all text content from this document. Return ONLY the extracted text content, no commentary.' },
+    ]);
 
-    const extractedText = response.content[0].type === 'text'
-      ? response.content[0].text
-      : '';
+    const response = result.response;
+    const extractedText = response.text();
+
+    console.log(`Extracted ${extractedText.length} chars from ${filename} using ${modelName}`);
 
     // Determine confidence based on response characteristics
-    let confidence = 0.8;
+    let confidence = useAdvanced ? 0.95 : 0.9;
     if (extractedText.toLowerCase().includes('illegible') ||
         extractedText.toLowerCase().includes('cannot read')) {
       confidence = 0.6;
