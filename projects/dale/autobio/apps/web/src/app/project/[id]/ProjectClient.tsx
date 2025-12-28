@@ -23,13 +23,15 @@ import {
   Edit2,
   Trash2,
   GripVertical,
+  Settings,
+  AlertTriangle,
 } from 'lucide-react';
 import { FileUploader, ContentGrid, ProgressFeed } from '@autobiography/ui';
 import type { ContentItem } from '@autobiography/ui';
 import * as api from '@/lib/api';
 import { getToken } from '@/lib/auth';
 
-type Tab = 'upload' | 'content' | 'chapters' | 'preview' | 'publish';
+type Tab = 'upload' | 'content' | 'chapters' | 'preview' | 'publish' | 'settings';
 
 interface ProjectFile {
   id: string;
@@ -88,6 +90,10 @@ export default function ProjectClient({ projectId }: ProjectClientProps) {
   const [chapterTheme, setChapterTheme] = useState('');
   const [isSubmittingChapter, setIsSubmittingChapter] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Settings danger zone state
+  const [dangerAction, setDangerAction] = useState<'clear-chapters' | 'clear-narratives' | 'reset' | 'delete' | null>(null);
+  const [isDangerActionLoading, setIsDangerActionLoading] = useState(false);
 
   // Fetch project data
   const fetchProject = useCallback(async () => {
@@ -381,6 +387,44 @@ export default function ProjectClient({ projectId }: ProjectClientProps) {
     }
   };
 
+  // Danger zone actions
+  const handleDangerAction = async () => {
+    const token = getToken();
+    if (!token || !dangerAction) return;
+
+    setIsDangerActionLoading(true);
+    try {
+      switch (dangerAction) {
+        case 'clear-chapters':
+          await api.projects.clearChapters(projectId, token);
+          setChapters([]);
+          setContent((prev) => prev.map((c) => ({ ...c, chapter_id: undefined })));
+          break;
+        case 'clear-narratives':
+          await api.projects.clearNarratives(projectId, token);
+          break;
+        case 'reset':
+          await api.projects.reset(projectId, token);
+          setFiles([]);
+          setContent([]);
+          setChapters([]);
+          await fetchProject();
+          break;
+        case 'delete':
+          await api.projects.delete(projectId, token);
+          router.push('/dashboard');
+          return;
+      }
+      setDangerAction(null);
+      await fetchProject();
+    } catch (err) {
+      console.error('Danger action failed:', err);
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setIsDangerActionLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -408,6 +452,7 @@ export default function ProjectClient({ projectId }: ProjectClientProps) {
     { id: 'chapters', label: 'Chapters', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'preview', label: 'Preview', icon: <Eye className="w-4 h-4" /> },
     { id: 'publish', label: 'Publish', icon: <Globe className="w-4 h-4" /> },
+    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
   const selectedCount = content.filter((c) => c.is_selected).length;
@@ -1004,6 +1049,146 @@ export default function ProjectClient({ projectId }: ProjectClientProps) {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Project Settings
+            </h2>
+
+            {/* Danger Zone */}
+            <div className="card border-red-200">
+              <div className="p-4 border-b border-red-100 bg-red-50 rounded-t-xl">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <h3 className="font-semibold text-red-900">Danger Zone</h3>
+                </div>
+                <p className="text-sm text-red-700 mt-1">
+                  These actions are destructive and cannot be undone.
+                </p>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Clear Chapters */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <h4 className="font-medium text-gray-900">Clear Chapters</h4>
+                    <p className="text-sm text-gray-500">
+                      Remove all chapters and unassign content. Content items will remain.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setDangerAction('clear-chapters')}
+                    className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium text-sm"
+                  >
+                    Clear Chapters
+                  </button>
+                </div>
+
+                {/* Clear Narratives */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <h4 className="font-medium text-gray-900">Clear Narratives</h4>
+                    <p className="text-sm text-gray-500">
+                      Remove all generated narratives. You can regenerate them later.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setDangerAction('clear-narratives')}
+                    className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-medium text-sm"
+                  >
+                    Clear Narratives
+                  </button>
+                </div>
+
+                {/* Reset Project */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <h4 className="font-medium text-gray-900">Reset Project</h4>
+                    <p className="text-sm text-gray-500">
+                      Delete all files, content, chapters, and narratives. Start fresh.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setDangerAction('reset')}
+                    className="px-4 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm"
+                  >
+                    Reset Project
+                  </button>
+                </div>
+
+                {/* Delete Project */}
+                <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div>
+                    <h4 className="font-medium text-red-900">Delete Project</h4>
+                    <p className="text-sm text-red-700">
+                      Permanently delete this project and all its data. This cannot be undone.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setDangerAction('delete')}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm"
+                  >
+                    Delete Project
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Confirmation Modal */}
+            {dangerAction && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+                  <div className="p-4 border-b border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {dangerAction === 'clear-chapters' && 'Clear All Chapters?'}
+                          {dangerAction === 'clear-narratives' && 'Clear All Narratives?'}
+                          {dangerAction === 'reset' && 'Reset Project?'}
+                          {dangerAction === 'delete' && 'Delete Project?'}
+                        </h3>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-gray-600">
+                      {dangerAction === 'clear-chapters' &&
+                        'This will remove all chapters and unassign all content. Your content items will remain, but you\'ll need to create chapters again.'}
+                      {dangerAction === 'clear-narratives' &&
+                        'This will remove all generated narrative text. You can regenerate narratives later.'}
+                      {dangerAction === 'reset' &&
+                        'This will delete all files, content, chapters, and narratives for this project. You\'ll start with a blank project.'}
+                      {dangerAction === 'delete' &&
+                        'This will permanently delete this project and all associated data. This action cannot be undone.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+                    <button
+                      onClick={() => setDangerAction(null)}
+                      disabled={isDangerActionLoading}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDangerAction}
+                      disabled={isDangerActionLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center gap-2"
+                    >
+                      {isDangerActionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {dangerAction === 'delete' ? 'Delete Forever' : 'Confirm'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

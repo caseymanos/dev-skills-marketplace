@@ -72,6 +72,24 @@ export const projects = {
       method: 'DELETE',
       token,
     }),
+
+  reset: (id: string, token: string) =>
+    request<{ success: boolean; message: string }>(`/api/projects/${id}/reset`, {
+      method: 'POST',
+      token,
+    }),
+
+  clearChapters: (id: string, token: string) =>
+    request<{ success: boolean; message: string }>(`/api/projects/${id}/clear-chapters`, {
+      method: 'POST',
+      token,
+    }),
+
+  clearNarratives: (id: string, token: string) =>
+    request<{ success: boolean; message: string }>(`/api/projects/${id}/clear-narratives`, {
+      method: 'POST',
+      token,
+    }),
 };
 
 // Upload endpoints

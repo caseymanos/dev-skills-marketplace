@@ -210,3 +210,104 @@ projectsRouter.delete('/:id', async (c) => {
 
   return c.body(null, 204);
 });
+
+// POST /api/projects/:id/reset - Reset project data (clear everything and start fresh)
+projectsRouter.post('/:id/reset', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('id');
+
+  // Verify ownership
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  )
+    .bind(projectId, userId)
+    .first();
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Project not found',
+        },
+      },
+      404
+    );
+  }
+
+  // Delete all content-related data but keep project
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM narratives WHERE project_id = ?').bind(projectId),
+    c.env.DB.prepare('DELETE FROM content WHERE project_id = ?').bind(projectId),
+    c.env.DB.prepare('DELETE FROM chapters WHERE project_id = ?').bind(projectId),
+    c.env.DB.prepare('DELETE FROM files WHERE project_id = ?').bind(projectId),
+    c.env.DB.prepare('DELETE FROM jobs WHERE project_id = ?').bind(projectId),
+    c.env.DB.prepare("UPDATE projects SET status = 'uploading', published_url = NULL, config = NULL WHERE id = ?").bind(projectId),
+  ]);
+
+  return c.json({ success: true, message: 'Project reset successfully' });
+});
+
+// POST /api/projects/:id/clear-chapters - Clear only chapters and assignments
+projectsRouter.post('/:id/clear-chapters', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('id');
+
+  // Verify ownership
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  )
+    .bind(projectId, userId)
+    .first();
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Project not found',
+        },
+      },
+      404
+    );
+  }
+
+  // Clear chapters and chapter assignments on content
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM chapters WHERE project_id = ?').bind(projectId),
+    c.env.DB.prepare('UPDATE content SET chapter_id = NULL WHERE project_id = ?').bind(projectId),
+  ]);
+
+  return c.json({ success: true, message: 'Chapters cleared' });
+});
+
+// POST /api/projects/:id/clear-narratives - Clear only narratives
+projectsRouter.post('/:id/clear-narratives', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('id');
+
+  // Verify ownership
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  )
+    .bind(projectId, userId)
+    .first();
+
+  if (!project) {
+    return c.json(
+      {
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Project not found',
+        },
+      },
+      404
+    );
+  }
+
+  await c.env.DB.prepare('DELETE FROM narratives WHERE project_id = ?')
+    .bind(projectId)
+    .run();
+
+  return c.json({ success: true, message: 'Narratives cleared' });
+});
