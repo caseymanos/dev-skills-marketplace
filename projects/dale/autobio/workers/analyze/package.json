@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@autobiography/types": "workspace:*",
-    "@anthropic-ai/sdk": "^0.36.1"
+    "@anthropic-ai/sdk": "^0.36.1",
+    "@google/generative-ai": "^0.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",

@@ -214,6 +214,15 @@ export interface AnalyzeContentMessage {
   timestamp: number;
 }
 
+export interface AnalyzeProjectMessage {
+  type: 'analyze_project';
+  jobId: string;
+  projectId: string;
+  userId: string;
+  stages: string[];
+  timestamp: number;
+}
+
 export interface WriteNarrativeMessage {
   type: 'write_narrative';
   contentId: string;
@@ -247,6 +256,7 @@ export interface BuildSiteMessage {
 export type QueueMessage =
   | ParseFileMessage
   | AnalyzeContentMessage
+  | AnalyzeProjectMessage
   | WriteNarrativeMessage
   | WriteProjectMessage
   | BuildSiteMessage;

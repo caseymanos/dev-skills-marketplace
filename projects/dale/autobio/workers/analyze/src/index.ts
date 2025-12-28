@@ -1,26 +1,39 @@
-import type { AnalyzeContentMessage } from '@autobiography/types';
+import type { AnalyzeContentMessage, AnalyzeProjectMessage } from '@autobiography/types';
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface Env {
   DB: D1Database;
   STORAGE: R2Bucket;
   PROGRESS_TRACKER: DurableObjectNamespace;
   CLAUDE_API_KEY: string;
+  GEMINI_API_KEY: string;
   ENVIRONMENT: string;
 }
 
+type AnalyzeMessage = AnalyzeContentMessage | AnalyzeProjectMessage;
+
 interface QueueBatch {
-  messages: Message<AnalyzeContentMessage>[];
+  messages: Message<AnalyzeMessage>[];
 }
 
 export default {
   async queue(batch: QueueBatch, env: Env): Promise<void> {
     for (const message of batch.messages) {
       try {
-        await analyzeContent(message.body, env);
+        const msg = message.body;
+
+        if (msg.type === 'analyze_project') {
+          // Project-level analysis: create chapters and assign content
+          await analyzeProjectAndCreateChapters(msg.projectId, env);
+        } else if (msg.type === 'analyze_content') {
+          // Individual content analysis
+          await analyzeContent(msg, env);
+        }
+
         message.ack();
       } catch (error) {
-        console.error('Failed to analyze content:', message.body.contentId, error);
+        console.error('Failed to analyze:', error);
         message.retry();
       }
     }
@@ -243,4 +256,416 @@ async function sendDiscovery(
   } catch (error) {
     console.error('Failed to send discovery:', error);
   }
+}
+
+// Analyze all content for a project and create chapters automatically
+async function analyzeProjectAndCreateChapters(
+  projectId: string,
+  env: Env
+): Promise<void> {
+  await updateProgress(env, projectId, {
+    stage: 'analyze',
+    progress: 70,
+    message: 'Organizing content into chapters...',
+  });
+
+  // Get all selected content with their analysis
+  const contentResult = await env.DB.prepare(`
+    SELECT c.id, c.extracted_text, c.analysis, c.content_type, f.original_name
+    FROM content c
+    JOIN files f ON f.id = c.file_id
+    WHERE c.project_id = ? AND c.is_selected = 1
+    ORDER BY c.created_at
+  `)
+    .bind(projectId)
+    .all();
+
+  if (!contentResult.results || contentResult.results.length === 0) {
+    await updateProgress(env, projectId, {
+      stage: 'analyze',
+      progress: 100,
+      message: 'No selected content to organize',
+    });
+    return;
+  }
+
+  // Check if chapters already exist
+  const existingChapters = await env.DB.prepare(
+    'SELECT COUNT(*) as count FROM chapters WHERE project_id = ?'
+  )
+    .bind(projectId)
+    .first();
+
+  if ((existingChapters?.count as number) > 0) {
+    // Chapters already exist, just assign content to suggested chapters
+    await assignContentToExistingChapters(projectId, contentResult.results, env);
+    return;
+  }
+
+  // Collect all themes and suggested chapters from content
+  const contentSummaries: Array<{
+    id: string;
+    themes: string[];
+    suggestedChapter: string | null;
+    lifePhase: string | null;
+    text: string;
+  }> = [];
+
+  for (const content of contentResult.results) {
+    const analysis = content.analysis
+      ? JSON.parse(content.analysis as string)
+      : {};
+
+    contentSummaries.push({
+      id: content.id as string,
+      themes: analysis.themes || [],
+      suggestedChapter: analysis.suggested_chapter || null,
+      lifePhase: analysis.timeline_placement?.life_phase || null,
+      text: ((content.extracted_text as string) || '').slice(0, 200),
+    });
+  }
+
+  // Use Gemini to create a chapter structure based on content
+  const chapters = await generateChapterStructure(contentSummaries, env);
+
+  // Create chapters in database
+  const chapterMap = new Map<string, string>(); // title -> id
+
+  for (let i = 0; i < chapters.length; i++) {
+    const chapter = chapters[i];
+    const chapterId = `ch_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+    await env.DB.prepare(`
+      INSERT INTO chapters (id, project_id, title, intro_text, sort_order, theme, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `)
+      .bind(
+        chapterId,
+        projectId,
+        chapter.title,
+        chapter.intro || null,
+        i + 1,
+        chapter.theme || null
+      )
+      .run();
+
+    chapterMap.set(chapter.title.toLowerCase(), chapterId);
+
+    // Also map any alternative names
+    if (chapter.matches) {
+      for (const match of chapter.matches) {
+        chapterMap.set(match.toLowerCase(), chapterId);
+      }
+    }
+  }
+
+  // Assign content to chapters
+  for (const content of contentSummaries) {
+    let assignedChapterId: string | null = null;
+
+    // Try to match by suggested chapter
+    if (content.suggestedChapter) {
+      const key = content.suggestedChapter.toLowerCase();
+      for (const [chapterKey, chapterId] of chapterMap) {
+        if (
+          key.includes(chapterKey) ||
+          chapterKey.includes(key) ||
+          levenshteinSimilarity(key, chapterKey) > 0.6
+        ) {
+          assignedChapterId = chapterId;
+          break;
+        }
+      }
+    }
+
+    // Try to match by life phase
+    if (!assignedChapterId && content.lifePhase) {
+      const phaseKey = content.lifePhase.toLowerCase();
+      for (const [chapterKey, chapterId] of chapterMap) {
+        if (chapterKey.includes(phaseKey) || phaseKey.includes(chapterKey)) {
+          assignedChapterId = chapterId;
+          break;
+        }
+      }
+    }
+
+    // Try to match by themes
+    if (!assignedChapterId && content.themes.length > 0) {
+      for (const theme of content.themes) {
+        const themeKey = theme.toLowerCase();
+        for (const [chapterKey, chapterId] of chapterMap) {
+          if (chapterKey.includes(themeKey) || themeKey.includes(chapterKey)) {
+            assignedChapterId = chapterId;
+            break;
+          }
+        }
+        if (assignedChapterId) break;
+      }
+    }
+
+    // If still no match, assign to first chapter
+    if (!assignedChapterId && chapters.length > 0) {
+      assignedChapterId = chapterMap.get(chapters[0].title.toLowerCase()) || null;
+    }
+
+    if (assignedChapterId) {
+      await env.DB.prepare('UPDATE content SET chapter_id = ? WHERE id = ?')
+        .bind(assignedChapterId, content.id)
+        .run();
+    }
+  }
+
+  await sendDiscovery(env, projectId, {
+    type: 'chapters',
+    preview: `Created ${chapters.length} chapters: ${chapters.map((c) => c.title).join(', ')}`,
+  });
+
+  await updateProgress(env, projectId, {
+    stage: 'analyze',
+    progress: 100,
+    message: `Organized content into ${chapters.length} chapters`,
+  });
+}
+
+// Assign content to existing chapters based on analysis
+async function assignContentToExistingChapters(
+  projectId: string,
+  contentList: D1Result<Record<string, unknown>>['results'],
+  env: Env
+): Promise<void> {
+  // Get existing chapters
+  const chaptersResult = await env.DB.prepare(
+    'SELECT id, title, theme FROM chapters WHERE project_id = ? ORDER BY sort_order'
+  )
+    .bind(projectId)
+    .all();
+
+  if (!chaptersResult.results || chaptersResult.results.length === 0) {
+    return;
+  }
+
+  const chapterMap = new Map<string, string>();
+  for (const chapter of chaptersResult.results) {
+    chapterMap.set((chapter.title as string).toLowerCase(), chapter.id as string);
+    if (chapter.theme) {
+      chapterMap.set((chapter.theme as string).toLowerCase(), chapter.id as string);
+    }
+  }
+
+  // Assign each content piece
+  for (const content of contentList) {
+    if (content.chapter_id) continue; // Already assigned
+
+    const analysis = content.analysis
+      ? JSON.parse(content.analysis as string)
+      : {};
+
+    let assignedChapterId: string | null = null;
+
+    // Try suggested chapter
+    if (analysis.suggested_chapter) {
+      const key = analysis.suggested_chapter.toLowerCase();
+      for (const [chapterKey, chapterId] of chapterMap) {
+        if (key.includes(chapterKey) || chapterKey.includes(key)) {
+          assignedChapterId = chapterId;
+          break;
+        }
+      }
+    }
+
+    // Try life phase
+    if (!assignedChapterId && analysis.timeline_placement?.life_phase) {
+      const phaseKey = analysis.timeline_placement.life_phase.toLowerCase();
+      for (const [chapterKey, chapterId] of chapterMap) {
+        if (chapterKey.includes(phaseKey) || phaseKey.includes(chapterKey)) {
+          assignedChapterId = chapterId;
+          break;
+        }
+      }
+    }
+
+    // Try themes
+    if (!assignedChapterId && analysis.themes) {
+      for (const theme of analysis.themes) {
+        const themeKey = theme.toLowerCase();
+        for (const [chapterKey, chapterId] of chapterMap) {
+          if (chapterKey.includes(themeKey) || themeKey.includes(chapterKey)) {
+            assignedChapterId = chapterId;
+            break;
+          }
+        }
+        if (assignedChapterId) break;
+      }
+    }
+
+    if (assignedChapterId) {
+      await env.DB.prepare('UPDATE content SET chapter_id = ? WHERE id = ?')
+        .bind(assignedChapterId, content.id)
+        .run();
+    }
+  }
+
+  await updateProgress(env, projectId, {
+    stage: 'analyze',
+    progress: 100,
+    message: 'Content assigned to chapters',
+  });
+}
+
+interface GeneratedChapter {
+  title: string;
+  theme?: string;
+  intro?: string;
+  matches?: string[];
+}
+
+// Use Gemini to generate a chapter structure
+async function generateChapterStructure(
+  contentSummaries: Array<{
+    id: string;
+    themes: string[];
+    suggestedChapter: string | null;
+    lifePhase: string | null;
+    text: string;
+  }>,
+  env: Env
+): Promise<GeneratedChapter[]> {
+  // Aggregate themes and suggested chapters
+  const allThemes = new Set<string>();
+  const allSuggestedChapters = new Set<string>();
+  const allLifePhases = new Set<string>();
+
+  for (const content of contentSummaries) {
+    content.themes.forEach((t) => allThemes.add(t));
+    if (content.suggestedChapter) allSuggestedChapters.add(content.suggestedChapter);
+    if (content.lifePhase) allLifePhases.add(content.lifePhase);
+  }
+
+  const prompt = `You are organizing an autobiography. Based on the following themes, suggested chapters, and life phases from the content, create a logical chapter structure.
+
+THEMES: ${Array.from(allThemes).slice(0, 20).join(', ')}
+SUGGESTED CHAPTERS: ${Array.from(allSuggestedChapters).slice(0, 10).join(', ')}
+LIFE PHASES: ${Array.from(allLifePhases).join(', ')}
+
+SAMPLE CONTENT (first 5 items):
+${contentSummaries.slice(0, 5).map((c) => `- ${c.text.slice(0, 100)}...`).join('\n')}
+
+Create 3-7 chapters that would best organize this autobiography. Each chapter should have:
+- A compelling, personal title (not generic like "Chapter 1")
+- A brief theme description
+- Alternative names/keywords that might match this chapter
+
+Respond with valid JSON only:
+{
+  "chapters": [
+    {
+      "title": "Growing Up in the Midwest",
+      "theme": "childhood and family origins",
+      "intro": "A brief poetic introduction...",
+      "matches": ["childhood", "early years", "family", "home"]
+    }
+  ]
+}`;
+
+  try {
+    if (env.GEMINI_API_KEY) {
+      const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' });
+
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+
+      // Parse JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.chapters && Array.isArray(parsed.chapters)) {
+          return parsed.chapters;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Gemini chapter generation failed:', error);
+  }
+
+  // Fallback: create chapters from life phases and top themes
+  const fallbackChapters: GeneratedChapter[] = [];
+
+  // Add life phase chapters
+  const lifePhaseMap: Record<string, string> = {
+    childhood: 'Early Years',
+    school: 'School Days',
+    college: 'College Years',
+    early_career: 'Starting Out',
+    career: 'Career Journey',
+    family: 'Family Life',
+    retirement: 'Later Years',
+  };
+
+  for (const phase of allLifePhases) {
+    const title = lifePhaseMap[phase] || phase.replace(/_/g, ' ');
+    fallbackChapters.push({
+      title: title.charAt(0).toUpperCase() + title.slice(1),
+      theme: phase,
+      matches: [phase],
+    });
+  }
+
+  // If no life phases, use top themes
+  if (fallbackChapters.length === 0) {
+    const topThemes = Array.from(allThemes).slice(0, 5);
+    for (const theme of topThemes) {
+      fallbackChapters.push({
+        title: theme.charAt(0).toUpperCase() + theme.slice(1),
+        theme: theme,
+        matches: [theme],
+      });
+    }
+  }
+
+  // Ensure at least one chapter
+  if (fallbackChapters.length === 0) {
+    fallbackChapters.push({
+      title: 'My Story',
+      theme: 'general',
+      matches: [],
+    });
+  }
+
+  return fallbackChapters;
+}
+
+// Simple Levenshtein similarity (0-1)
+function levenshteinSimilarity(a: string, b: string): number {
+  if (a.length === 0) return b.length === 0 ? 1 : 0;
+  if (b.length === 0) return 0;
+
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  const distance = matrix[b.length][a.length];
+  const maxLen = Math.max(a.length, b.length);
+  return 1 - distance / maxLen;
 }
