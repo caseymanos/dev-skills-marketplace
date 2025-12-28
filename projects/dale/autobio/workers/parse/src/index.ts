@@ -1,5 +1,6 @@
 import type { ParseFileMessage } from '@autobiography/types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 
 interface Env {
   DB: D1Database;
@@ -7,7 +8,8 @@ interface Env {
   ANALYZE_QUEUE: Queue;
   PROGRESS_TRACKER: DurableObjectNamespace;
   ENVIRONMENT: string;
-  GEMINI_API_KEY: string;
+  GEMINI_API_KEY?: string;
+  CLAUDE_API_KEY?: string;
 }
 
 // Constants
@@ -222,7 +224,7 @@ async function parseZipFile(
           },
         });
       } else if (ext === 'pdf') {
-        // Parse PDF using Gemini 2.0 Flash (cheap & fast)
+        // Parse PDF from archive using Gemini with Claude fallback
         const pdfData = await file.async('arraybuffer');
         const pdfSizeMB = pdfData.byteLength / (1024 * 1024);
 
@@ -236,45 +238,72 @@ async function parseZipFile(
             },
           });
         } else {
-          try {
-            const useAdvanced = isComplexPdf(path, pdfSizeMB);
-            const modelName = useAdvanced ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
-            console.log(`Processing PDF ${path} (${pdfSizeMB.toFixed(2)}MB) from archive with ${modelName}...`);
+          const base64Data = arrayBufferToBase64(pdfData);
+          let extracted = false;
 
-            const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-            const model = genAI.getGenerativeModel({ model: modelName });
-            const base64Data = arrayBufferToBase64(pdfData);
+          // Try Gemini first
+          if (env.GEMINI_API_KEY && !extracted) {
+            try {
+              console.log(`Processing PDF ${path} (${pdfSizeMB.toFixed(2)}MB) from archive with Gemini...`);
+              const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+              const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-            const result = await model.generateContent([
-              {
-                inlineData: {
-                  mimeType: 'application/pdf',
-                  data: base64Data,
-                },
-              },
-              { text: 'Extract all text content from this document. Return ONLY the extracted text content.' },
-            ]);
+              const result = await model.generateContent([
+                { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+                { text: 'Extract all text content from this document. Return ONLY the extracted text content.' },
+              ]);
 
-            const extractedText = result.response.text();
-            console.log(`Extracted ${extractedText.length} chars from ${path}`);
+              const extractedText = result.response.text();
+              console.log(`Extracted ${extractedText.length} chars from ${path} using Gemini`);
 
-            results.push({
-              type: 'text',
-              text: extractedText.slice(0, MAX_TEXT_LENGTH),
-              metadata: {
-                filename: path,
-                confidence_score: useAdvanced ? 0.95 : 0.9,
-              },
-            });
-          } catch (error) {
-            console.error(`Error processing PDF ${path} from archive:`, error);
+              results.push({
+                type: 'text',
+                text: extractedText.slice(0, MAX_TEXT_LENGTH),
+                metadata: { filename: path, confidence_score: 0.9 },
+              });
+              extracted = true;
+            } catch (geminiError) {
+              console.warn(`Gemini failed for ${path}, trying Claude:`, geminiError);
+            }
+          }
+
+          // Fallback to Claude
+          if (env.CLAUDE_API_KEY && !extracted) {
+            try {
+              console.log(`Processing PDF ${path} from archive with Claude...`);
+              const anthropic = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
+
+              const response = await anthropic.messages.create({
+                model: 'claude-3-5-sonnet-20241022',
+                max_tokens: 4096,
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
+                    { type: 'text', text: 'Extract all text content from this document. Return ONLY the extracted text content.' },
+                  ],
+                }],
+              });
+
+              const extractedText = response.content[0].type === 'text' ? response.content[0].text : '';
+              console.log(`Extracted ${extractedText.length} chars from ${path} using Claude`);
+
+              results.push({
+                type: 'text',
+                text: extractedText.slice(0, MAX_TEXT_LENGTH),
+                metadata: { filename: path, confidence_score: 0.9 },
+              });
+              extracted = true;
+            } catch (claudeError) {
+              console.error(`Claude also failed for ${path}:`, claudeError);
+            }
+          }
+
+          if (!extracted) {
             results.push({
               type: 'text',
               text: `[PDF: ${path} - extraction failed]`,
-              metadata: {
-                filename: path,
-                confidence_score: 0.4,
-              },
+              metadata: { filename: path, confidence_score: 0.4 },
             });
           }
         }
@@ -320,7 +349,7 @@ function isComplexPdf(filename: string, sizeMB: number): boolean {
   return false;
 }
 
-// Parse PDF using Gemini - routes to 2.0 Flash (cheap) or 3 Flash (complex docs)
+// Parse PDF using Gemini (cheap) with Claude fallback
 async function parsePdf(
   r2Object: R2ObjectBody,
   filename: string,
@@ -341,82 +370,124 @@ async function parsePdf(
     }];
   }
 
-  // Route to appropriate model
-  const useAdvanced = isComplexPdf(filename, sizeMB);
-  const modelName = useAdvanced ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
-  // Note: Using 2.0 Flash for both initially since 3 Flash may not be in API yet
-  // Change to 'gemini-3-flash' when available
+  const base64Data = arrayBufferToBase64(arrayBuffer);
 
-  console.log(`Processing PDF ${filename} (${sizeMB.toFixed(2)}MB) with ${modelName}...`);
+  // Try Gemini first (cheaper), fall back to Claude
+  if (env.GEMINI_API_KEY) {
+    try {
+      const modelName = 'gemini-2.0-flash';
+      console.log(`Processing PDF ${filename} (${sizeMB.toFixed(2)}MB) with ${modelName}...`);
 
-  try {
-    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: modelName });
+      const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: modelName });
 
-    // Convert to base64 for Gemini
-    const base64Data = arrayBufferToBase64(arrayBuffer);
-
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: 'application/pdf',
-          data: base64Data,
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            mimeType: 'application/pdf',
+            data: base64Data,
+          },
         },
-      },
-      { text: 'Extract all text content from this document. Return ONLY the extracted text content, no commentary.' },
-    ]);
+        { text: 'Extract all text content from this document. Return ONLY the extracted text content, no commentary.' },
+      ]);
 
-    const response = result.response;
-    const extractedText = response.text();
+      const extractedText = result.response.text();
+      console.log(`Extracted ${extractedText.length} chars from ${filename} using Gemini`);
 
-    console.log(`Extracted ${extractedText.length} chars from ${filename} using ${modelName}`);
-
-    // Determine confidence based on response characteristics
-    let confidence = useAdvanced ? 0.95 : 0.9;
-    if (extractedText.toLowerCase().includes('illegible') ||
-        extractedText.toLowerCase().includes('cannot read')) {
-      confidence = 0.6;
-    }
-    if (extractedText.length < 100) {
-      confidence = 0.5;
-    }
-
-    return [{
-      type: 'text',
-      text: extractedText.slice(0, MAX_TEXT_LENGTH),
-      metadata: {
-        filename,
-        confidence_score: confidence,
-      },
-    }];
-  } catch (error) {
-    console.error(`Failed to parse PDF ${filename}:`, error);
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-    // Check for specific error types
-    if (errorMessage.toLowerCase().includes('password') ||
-        errorMessage.toLowerCase().includes('encrypted')) {
       return [{
         type: 'text',
-        text: `[Password-protected PDF: ${filename} - Please remove password protection and re-upload]`,
+        text: extractedText.slice(0, MAX_TEXT_LENGTH),
         metadata: {
           filename,
-          confidence_score: 0.2,
+          confidence_score: 0.9,
+        },
+      }];
+    } catch (geminiError) {
+      console.warn(`Gemini failed for ${filename}, falling back to Claude:`, geminiError);
+      // Fall through to Claude
+    }
+  }
+
+  // Fallback to Claude 3.5 Sonnet
+  if (env.CLAUDE_API_KEY) {
+    try {
+      console.log(`Processing PDF ${filename} (${sizeMB.toFixed(2)}MB) with Claude 3.5 Sonnet...`);
+      const anthropic = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
+
+      const response = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: {
+                  type: 'base64',
+                  media_type: 'application/pdf',
+                  data: base64Data,
+                },
+              },
+              {
+                type: 'text',
+                text: 'Extract all text content from this document. Return ONLY the extracted text content, no commentary.',
+              },
+            ],
+          },
+        ],
+      });
+
+      const extractedText = response.content[0].type === 'text'
+        ? response.content[0].text
+        : '';
+
+      console.log(`Extracted ${extractedText.length} chars from ${filename} using Claude`);
+
+      return [{
+        type: 'text',
+        text: extractedText.slice(0, MAX_TEXT_LENGTH),
+        metadata: {
+          filename,
+          confidence_score: 0.9,
+        },
+      }];
+    } catch (claudeError) {
+      console.error(`Claude also failed for ${filename}:`, claudeError);
+      const errorMessage = claudeError instanceof Error ? claudeError.message : 'Unknown error';
+
+      if (errorMessage.toLowerCase().includes('password') ||
+          errorMessage.toLowerCase().includes('encrypted')) {
+        return [{
+          type: 'text',
+          text: `[Password-protected PDF: ${filename} - Please remove password protection and re-upload]`,
+          metadata: {
+            filename,
+            confidence_score: 0.2,
+          },
+        }];
+      }
+
+      return [{
+        type: 'text',
+        text: `[PDF Document: ${filename} - Unable to extract content: ${errorMessage}]`,
+        metadata: {
+          filename,
+          confidence_score: 0.4,
         },
       }];
     }
-
-    // Graceful fallback
-    return [{
-      type: 'text',
-      text: `[PDF Document: ${filename} - Unable to extract content: ${errorMessage}]`,
-      metadata: {
-        filename,
-        confidence_score: 0.4,
-      },
-    }];
   }
+
+  // No API keys available
+  return [{
+    type: 'text',
+    text: `[PDF Document: ${filename} - No API keys configured for PDF extraction]`,
+    metadata: {
+      filename,
+      confidence_score: 0.2,
+    },
+  }];
 }
 
 // Parse DOCX file

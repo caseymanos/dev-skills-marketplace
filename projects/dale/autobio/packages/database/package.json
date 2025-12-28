@@ -1,0 +1,21 @@
+{
+  "name": "@autobiography/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "migrate": "wrangler d1 migrations apply autobiography-db --local",
+    "migrate:remote": "wrangler d1 migrations apply autobiography-db --remote",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@autobiography/types": "workspace:*",
+    "drizzle-orm": "^0.38.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.1",
+    "typescript": "^5.7.2"
+  }
+}

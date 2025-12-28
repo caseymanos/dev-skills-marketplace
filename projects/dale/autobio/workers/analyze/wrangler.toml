@@ -1,0 +1,33 @@
+# Analyze Worker - Content analysis queue consumer
+name = "autobiography-analyze-worker"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "autobiography-db"
+database_id = "1e9b2d62-e6c4-4335-ac4c-991076d17000"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "autobiography-files"
+
+# Queue Consumer
+[[queues.consumers]]
+queue = "autobiography-analyze"
+max_batch_size = 5
+max_batch_timeout = 60
+max_retries = 3
+dead_letter_queue = "autobiography-dlq"
+
+# Durable Object for progress updates
+[durable_objects]
+bindings = [
+  { name = "PROGRESS_TRACKER", class_name = "ProgressTracker", script_name = "autobiography-api" }
+]
+
+[vars]
+ENVIRONMENT = "development"

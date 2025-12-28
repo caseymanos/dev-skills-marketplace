@@ -1,5 +1,5 @@
 {
-  "name": "parse-worker",
+  "name": "write-worker",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,11 +8,9 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.3",
+    "@anthropic-ai/sdk": "^0.32.1",
     "@autobiography/types": "workspace:*",
-    "@google/generative-ai": "^0.24.1",
-    "jszip": "^3.10.1",
-    "pdfjs-dist": "^5.4.449"
+    "@google/generative-ai": "^0.24.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
