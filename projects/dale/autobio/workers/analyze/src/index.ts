@@ -29,6 +29,17 @@ export default {
         } else if (msg.type === 'analyze_content') {
           // Individual content analysis
           await analyzeContent(msg, env);
+
+          // Check if all content is now analyzed - if so, auto-create chapters
+          const pendingResult = await env.DB.prepare(`
+            SELECT COUNT(*) as pending FROM content
+            WHERE project_id = ? AND analysis IS NULL
+          `).bind(msg.projectId).first();
+
+          if (pendingResult?.pending === 0) {
+            console.log(`All content analyzed for project ${msg.projectId}, triggering chapter creation`);
+            await analyzeProjectAndCreateChapters(msg.projectId, env);
+          }
         }
 
         message.ack();
