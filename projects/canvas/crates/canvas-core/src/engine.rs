@@ -117,7 +117,7 @@ impl CanvasEngine {
     pub fn render(&mut self) -> RenderStats {
         let start = std::time::Instant::now();
         let stats = if let Some(renderer) = &mut self.renderer {
-            renderer.render(&self.world, &self.camera, &self.scene, &self.selection)
+            renderer.render(&mut self.world, &self.camera, &self.scene, &self.selection)
         } else {
             RenderStats::default()
         };

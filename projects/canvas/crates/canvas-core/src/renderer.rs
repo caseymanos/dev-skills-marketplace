@@ -1,13 +1,21 @@
 //! Renderer - GPU rendering with wgpu.
 
 use bevy_ecs::prelude::*;
-use canvas_schema::Color;
+use canvas_schema::{Color, FillStyle};
 use crate::camera::Camera;
 use crate::engine::{RenderStats, SelectionState};
+use crate::ecs::{
+    EllipseComponent, FillComponent, LineComponent, RectangleComponent, Renderable,
+    ShapeType, StrokeComponent, TransformComponent, VisibilityComponent, ZIndexComponent,
+};
 use crate::scene::SceneGraph;
 use std::sync::Arc;
 
 const SHAPE_SHADER: &str = include_str!("shaders/shape.wgsl");
+
+/// Maximum vertices per frame (grows dynamically if needed)
+const INITIAL_VERTEX_CAPACITY: usize = 4096;
+const INITIAL_INDEX_CAPACITY: usize = 8192;
 
 pub struct Renderer {
     device: Arc<wgpu::Device>,
@@ -20,7 +28,8 @@ pub struct Renderer {
     camera_bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    vertex_capacity: usize,
+    index_capacity: usize,
 }
 
 impl Renderer {
@@ -185,31 +194,19 @@ impl Renderer {
             cache: None,
         });
 
-        // Create a hard-coded rectangle (two triangles)
-        // Rectangle centered at (400, 200) with size 200x100
-        let vertices = [
-            // First triangle
-            Vertex { position: [300.0, 150.0], color: [1.0, 0.2, 0.3, 1.0] }, // top-left (red)
-            Vertex { position: [500.0, 150.0], color: [0.2, 1.0, 0.3, 1.0] }, // top-right (green)
-            Vertex { position: [500.0, 250.0], color: [0.2, 0.3, 1.0, 1.0] }, // bottom-right (blue)
-            Vertex { position: [300.0, 250.0], color: [1.0, 1.0, 0.3, 1.0] }, // bottom-left (yellow)
-        ];
-
-        let indices: [u16; 6] = [
-            0, 1, 2, // first triangle
-            0, 2, 3, // second triangle
-        ];
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        // Create dynamic vertex and index buffers with initial capacity
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
+            size: (INITIAL_VERTEX_CAPACITY * std::mem::size_of::<Vertex>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
+            size: (INITIAL_INDEX_CAPACITY * std::mem::size_of::<u16>()) as u64,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         log::info!("Renderer initialized: {}x{}, format: {:?}", width, height, format);
@@ -225,7 +222,8 @@ impl Renderer {
             camera_bind_group,
             vertex_buffer,
             index_buffer,
-            num_indices: indices.len() as u32,
+            vertex_capacity: INITIAL_VERTEX_CAPACITY,
+            index_capacity: INITIAL_INDEX_CAPACITY,
         })
     }
 
@@ -243,7 +241,7 @@ impl Renderer {
 
     pub fn render(
         &mut self,
-        _world: &World,
+        world: &mut World,
         camera: &Camera,
         _scene: &SceneGraph,
         _selection: &SelectionState,
@@ -252,6 +250,36 @@ impl Renderer {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_from_camera(camera);
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
+
+        // Build vertex and index data from ECS entities
+        let (vertices, indices, objects_rendered) = self.build_geometry(world);
+
+        // Upload geometry data if we have any
+        let num_indices = indices.len() as u32;
+        if !vertices.is_empty() {
+            // Resize buffers if needed
+            if vertices.len() > self.vertex_capacity {
+                self.vertex_capacity = vertices.len().next_power_of_two();
+                self.vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("Vertex Buffer"),
+                    size: (self.vertex_capacity * std::mem::size_of::<Vertex>()) as u64,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+            }
+            if indices.len() > self.index_capacity {
+                self.index_capacity = indices.len().next_power_of_two();
+                self.index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("Index Buffer"),
+                    size: (self.index_capacity * std::mem::size_of::<u16>()) as u64,
+                    usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+            }
+
+            self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+            self.queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&indices));
+        }
 
         // Get the next frame
         let frame = match self.surface.get_current_texture() {
@@ -293,11 +321,13 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            if num_indices > 0 {
+                render_pass.set_pipeline(&self.pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..num_indices, 0, 0..1);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -305,9 +335,287 @@ impl Renderer {
 
         RenderStats {
             frame_time: 0.0,
-            draw_calls: 1,
-            objects_rendered: 1,
+            draw_calls: if num_indices > 0 { 1 } else { 0 },
+            objects_rendered,
             objects_culled: 0,
+        }
+    }
+
+    /// Build geometry from ECS entities
+    fn build_geometry(&self, world: &mut World) -> (Vec<Vertex>, Vec<u16>, u32) {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let mut objects_rendered = 0u32;
+
+        // Query all renderable entities with their components, sorted by z-index
+        let mut entities: Vec<_> = world
+            .query_filtered::<(
+                Entity,
+                &TransformComponent,
+                &ZIndexComponent,
+                &VisibilityComponent,
+                Option<&ShapeType>,
+                Option<&RectangleComponent>,
+                Option<&EllipseComponent>,
+                Option<&LineComponent>,
+                Option<&FillComponent>,
+                Option<&StrokeComponent>,
+            ), With<Renderable>>()
+            .iter(world)
+            .filter(|(_, _, _, vis, _, _, _, _, _, _)| vis.visible)
+            .collect();
+
+        // Sort by z-index
+        entities.sort_by(|a, b| a.2.0.cmp(&b.2.0));
+
+        for (
+            _entity,
+            transform,
+            _z_index,
+            _visibility,
+            shape_type,
+            rect,
+            ellipse,
+            line,
+            fill,
+            stroke,
+        ) in entities
+        {
+            let base_vertex = vertices.len() as u16;
+
+            match shape_type {
+                Some(ShapeType::Rectangle) => {
+                    if let Some(rect) = rect {
+                        self.add_rectangle(
+                            &mut vertices,
+                            &mut indices,
+                            base_vertex,
+                            transform,
+                            rect,
+                            fill,
+                            stroke,
+                        );
+                        objects_rendered += 1;
+                    }
+                }
+                Some(ShapeType::Ellipse) => {
+                    if let Some(ellipse) = ellipse {
+                        self.add_ellipse(
+                            &mut vertices,
+                            &mut indices,
+                            base_vertex,
+                            transform,
+                            ellipse,
+                            fill,
+                            stroke,
+                        );
+                        objects_rendered += 1;
+                    }
+                }
+                Some(ShapeType::Line) => {
+                    if let Some(line) = line {
+                        self.add_line(
+                            &mut vertices,
+                            &mut indices,
+                            base_vertex,
+                            transform,
+                            line,
+                            stroke,
+                        );
+                        objects_rendered += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        (vertices, indices, objects_rendered)
+    }
+
+    /// Add rectangle vertices and indices
+    fn add_rectangle(
+        &self,
+        vertices: &mut Vec<Vertex>,
+        indices: &mut Vec<u16>,
+        base_vertex: u16,
+        transform: &TransformComponent,
+        rect: &RectangleComponent,
+        fill: Option<&FillComponent>,
+        stroke: Option<&StrokeComponent>,
+    ) {
+        let color = self.get_fill_color(fill);
+        let t = &transform.world;
+
+        // Rectangle vertices (4 corners)
+        let w = rect.width as f32;
+        let h = rect.height as f32;
+
+        // Apply transform to each corner
+        let corners = [
+            (0.0, 0.0),     // top-left
+            (w, 0.0),       // top-right
+            (w, h),         // bottom-right
+            (0.0, h),       // bottom-left
+        ];
+
+        for (lx, ly) in corners {
+            let x = (t.a * lx as f64 + t.c * ly as f64 + t.tx) as f32;
+            let y = (t.b * lx as f64 + t.d * ly as f64 + t.ty) as f32;
+            vertices.push(Vertex { position: [x, y], color });
+        }
+
+        // Two triangles for the quad
+        indices.extend_from_slice(&[
+            base_vertex,
+            base_vertex + 1,
+            base_vertex + 2,
+            base_vertex,
+            base_vertex + 2,
+            base_vertex + 3,
+        ]);
+
+        // Add stroke outline if present
+        if let Some(stroke_comp) = stroke {
+            let stroke_color = [
+                stroke_comp.0.color.r,
+                stroke_comp.0.color.g,
+                stroke_comp.0.color.b,
+                stroke_comp.0.color.a,
+            ];
+            let stroke_width = stroke_comp.0.width as f32;
+            self.add_stroke_outline(vertices, indices, base_vertex, &corners, t, stroke_color, stroke_width);
+        }
+    }
+
+    /// Add ellipse vertices and indices (approximated with triangles)
+    fn add_ellipse(
+        &self,
+        vertices: &mut Vec<Vertex>,
+        indices: &mut Vec<u16>,
+        base_vertex: u16,
+        transform: &TransformComponent,
+        ellipse: &EllipseComponent,
+        fill: Option<&FillComponent>,
+        _stroke: Option<&StrokeComponent>,
+    ) {
+        let color = self.get_fill_color(fill);
+        let t = &transform.world;
+        let rx = ellipse.radius_x as f32;
+        let ry = ellipse.radius_y as f32;
+
+        // Number of segments for circle approximation
+        const SEGMENTS: usize = 32;
+
+        // Center vertex
+        let cx = t.tx as f32;
+        let cy = t.ty as f32;
+        vertices.push(Vertex { position: [cx, cy], color });
+
+        // Perimeter vertices
+        for i in 0..SEGMENTS {
+            let angle = (i as f32 / SEGMENTS as f32) * std::f32::consts::TAU;
+            let lx = angle.cos() * rx;
+            let ly = angle.sin() * ry;
+            let x = (t.a * lx as f64 + t.c * ly as f64 + t.tx) as f32;
+            let y = (t.b * lx as f64 + t.d * ly as f64 + t.ty) as f32;
+            vertices.push(Vertex { position: [x, y], color });
+        }
+
+        // Triangle fan indices
+        for i in 0..SEGMENTS {
+            let next = (i + 1) % SEGMENTS;
+            indices.extend_from_slice(&[
+                base_vertex,                      // center
+                base_vertex + 1 + i as u16,       // current
+                base_vertex + 1 + next as u16,    // next
+            ]);
+        }
+    }
+
+    /// Add line vertices and indices (as a quad with thickness)
+    fn add_line(
+        &self,
+        vertices: &mut Vec<Vertex>,
+        indices: &mut Vec<u16>,
+        base_vertex: u16,
+        transform: &TransformComponent,
+        line: &LineComponent,
+        stroke: Option<&StrokeComponent>,
+    ) {
+        let stroke_width = stroke.map(|s| s.0.width).unwrap_or(1.0) as f32;
+        let color = stroke
+            .map(|s| [s.0.color.r, s.0.color.g, s.0.color.b, s.0.color.a])
+            .unwrap_or([0.0, 0.0, 0.0, 1.0]);
+
+        let t = &transform.world;
+
+        // Transform start and end points
+        let x1 = (t.a * line.start.x + t.c * line.start.y + t.tx) as f32;
+        let y1 = (t.b * line.start.x + t.d * line.start.y + t.ty) as f32;
+        let x2 = (t.a * line.end.x + t.c * line.end.y + t.tx) as f32;
+        let y2 = (t.b * line.end.x + t.d * line.end.y + t.ty) as f32;
+
+        // Calculate perpendicular for line thickness
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 0.001 {
+            return;
+        }
+
+        let half_width = stroke_width / 2.0;
+        let nx = -dy / len * half_width;
+        let ny = dx / len * half_width;
+
+        // Four vertices forming the line quad
+        vertices.push(Vertex { position: [x1 + nx, y1 + ny], color });
+        vertices.push(Vertex { position: [x1 - nx, y1 - ny], color });
+        vertices.push(Vertex { position: [x2 - nx, y2 - ny], color });
+        vertices.push(Vertex { position: [x2 + nx, y2 + ny], color });
+
+        // Two triangles
+        indices.extend_from_slice(&[
+            base_vertex,
+            base_vertex + 1,
+            base_vertex + 2,
+            base_vertex,
+            base_vertex + 2,
+            base_vertex + 3,
+        ]);
+    }
+
+    /// Add stroke outline around a shape
+    fn add_stroke_outline(
+        &self,
+        _vertices: &mut Vec<Vertex>,
+        _indices: &mut Vec<u16>,
+        _base_vertex: u16,
+        _corners: &[(f32, f32); 4],
+        _transform: &canvas_schema::Transform,
+        _color: [f32; 4],
+        _width: f32,
+    ) {
+        // TODO: Implement proper stroke outline rendering
+        // For now, strokes are not rendered separately
+    }
+
+    /// Extract fill color from FillComponent
+    fn get_fill_color(&self, fill: Option<&FillComponent>) -> [f32; 4] {
+        match fill {
+            Some(FillComponent(FillStyle::Solid { color })) => {
+                [color.r, color.g, color.b, color.a]
+            }
+            Some(FillComponent(FillStyle::LinearGradient { stops, .. })) => {
+                // Use first gradient stop color as fallback
+                stops.first().map(|s| [s.color.r, s.color.g, s.color.b, s.color.a])
+                    .unwrap_or([1.0, 1.0, 1.0, 1.0])
+            }
+            Some(FillComponent(FillStyle::RadialGradient { stops, .. })) => {
+                // Use first gradient stop color as fallback
+                stops.first().map(|s| [s.color.r, s.color.g, s.color.b, s.color.a])
+                    .unwrap_or([1.0, 1.0, 1.0, 1.0])
+            }
+            None => [1.0, 1.0, 1.0, 1.0], // Default white
         }
     }
 
