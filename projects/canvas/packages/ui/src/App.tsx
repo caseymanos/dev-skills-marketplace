@@ -4,13 +4,18 @@
  * Main application shell with canvas and toolbar.
  */
 
-import { useState, useCallback } from 'react';
-import { Canvas, Toolbar } from './components';
+import { useState, useCallback, useMemo } from 'react';
+import { Canvas, Toolbar, HistoryButtons } from './components';
+import { useHistory, useKeyboardShortcuts, COMMON_SHORTCUTS } from './hooks';
 import type { CameraState, ToolType } from '@canvas/contracts';
+import type { Shortcut } from './hooks';
 
 export function App() {
   const [tool, setTool] = useState<ToolType>('select');
   const [camera, setCamera] = useState<CameraState>({ x: 0, y: 0, zoom: 1 });
+
+  // History management
+  const { state: historyState, undo, redo } = useHistory();
 
   const handleCameraChange = useCallback((newCamera: CameraState) => {
     setCamera(newCamera);
@@ -19,6 +24,27 @@ export function App() {
   const handleToolChange = useCallback((newTool: ToolType) => {
     setTool(newTool);
   }, []);
+
+  // Keyboard shortcuts
+  const shortcuts: Shortcut[] = useMemo(
+    () => [
+      {
+        ...COMMON_SHORTCUTS.undo,
+        handler: () => undo(),
+      },
+      {
+        ...COMMON_SHORTCUTS.redo,
+        handler: () => redo(),
+      },
+      {
+        ...COMMON_SHORTCUTS.redoAlt,
+        handler: () => redo(),
+      },
+    ],
+    [undo, redo]
+  );
+
+  useKeyboardShortcuts({ shortcuts, enabled: true });
 
   return (
     <div
@@ -40,6 +66,7 @@ export function App() {
           padding: '12px 0',
           backgroundColor: '#252525',
           borderRight: '1px solid #404040',
+          gap: 12,
         }}
       >
         <Toolbar
@@ -47,6 +74,22 @@ export function App() {
           onToolChange={handleToolChange}
           position="left"
           enableShortcuts
+        />
+
+        {/* Divider */}
+        <div
+          style={{
+            width: '80%',
+            height: 1,
+            backgroundColor: '#404040',
+          }}
+        />
+
+        {/* History buttons */}
+        <HistoryButtons
+          historyState={historyState}
+          onUndo={undo}
+          onRedo={redo}
         />
       </aside>
 
@@ -66,16 +109,23 @@ export function App() {
         >
           <span style={{ fontWeight: 600, fontSize: 14 }}>Collaborative Canvas</span>
 
-          {/* Camera info */}
+          {/* Status info */}
           <div
             style={{
+              display: 'flex',
+              gap: 16,
               fontSize: 12,
               fontFamily: 'monospace',
               color: '#888',
             }}
           >
-            {Math.round(camera.zoom * 100)}% | ({Math.round(camera.x)},{' '}
-            {Math.round(camera.y)})
+            {historyState.undoCount > 0 && (
+              <span>History: {historyState.undoCount}</span>
+            )}
+            <span>
+              {Math.round(camera.zoom * 100)}% | ({Math.round(camera.x)},{' '}
+              {Math.round(camera.y)})
+            </span>
           </div>
         </header>
 

@@ -8,6 +8,9 @@ export type { ToolbarProps } from './Toolbar';
 export { ToolButton } from './ToolButton';
 export type { ToolButtonProps } from './ToolButton';
 
+export { HistoryButtons } from './HistoryButtons';
+export type { HistoryButtonsProps } from './HistoryButtons';
+
 export {
   TOOLS,
   getToolDefinition,
