@@ -15,6 +15,7 @@
 		38ACAC3A844567C7214B34E7 /* SwarmHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C192B650C351F602859ED6 /* SwarmHealthView.swift */; };
 		4A6F5F7EB49669E474E3DF4F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E61DA6BBD5C0E8288B36D1B0 /* Foundation.framework */; };
 		5C2FAD69BD3140FBA73A7389 /* AgentObsAppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC97086C1D16276F456CCC0A /* AgentObsAppTests.swift */; };
+		DI12CONT34TEST56SOURCES78 /* DIContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DI12CONT34TEST56FILEREF78 /* DIContainerTests.swift */; };
 		5D426B0455975153BC4BCD45 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D93115515D4A3651138A412 /* Extensions.swift */; };
 		687BE4E31D483678E8E05F24 /* SkillHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F2063D8B7CFD9169ADC8BE /* SkillHealthView.swift */; };
 		6CB06B1D6A4EC9E60C8BEF6F /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556181B7CC14B1A7054FC09A /* FeatureFlags.swift */; };
@@ -73,6 +74,7 @@
 		AEB5380F165EB16C50334458 /* Logger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		B71A390D990DBA04C662D4B1 /* ControlAction.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlAction.swift; sourceTree = "<group>"; };
 		BC97086C1D16276F456CCC0A /* AgentObsAppTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentObsAppTests.swift; sourceTree = "<group>"; };
+		DI12CONT34TEST56FILEREF78 /* DIContainerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DIContainerTests.swift; sourceTree = "<group>"; };
 		C2A6932AF75FE95380A87E17 /* AppNavigation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppNavigation.swift; sourceTree = "<group>"; };
 		C4F2063D8B7CFD9169ADC8BE /* SkillHealthView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SkillHealthView.swift; sourceTree = "<group>"; };
 		CAB89BB8BE307B5E2D446097 /* DataStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DataStore.swift; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 		2A5CD9EE246A5A2F48262E31 /* CoreTests */ = {
 			isa = PBXGroup;
 			children = (
+				DI12CONT34TEST56FILEREF78 /* DIContainerTests.swift */,
 			);
 			name = CoreTests;
 			path = CoreTests;
@@ -671,6 +674,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5C2FAD69BD3140FBA73A7389 /* AgentObsAppTests.swift in Sources */,
+				DI12CONT34TEST56SOURCES78 /* DIContainerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
