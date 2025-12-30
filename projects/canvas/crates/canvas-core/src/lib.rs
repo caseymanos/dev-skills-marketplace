@@ -5,6 +5,7 @@ mod engine;
 pub mod ecs;
 mod renderer;
 mod scene;
+mod text;
 mod tools;
 mod input;
 
@@ -13,6 +14,7 @@ pub use engine::*;
 pub use ecs::*;
 pub use renderer::*;
 pub use scene::*;
+pub use text::*;
 pub use tools::*;
 pub use input::*;
 pub use canvas_schema;

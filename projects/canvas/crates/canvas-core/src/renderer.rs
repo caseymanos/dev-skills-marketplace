@@ -6,9 +6,10 @@ use crate::camera::Camera;
 use crate::engine::{RenderStats, SelectionState};
 use crate::ecs::{
     EllipseComponent, FillComponent, LineComponent, RectangleComponent, Renderable,
-    ShapeType, StrokeComponent, TransformComponent, VisibilityComponent, ZIndexComponent,
+    ShapeType, StrokeComponent, TextComponent, TransformComponent, VisibilityComponent, ZIndexComponent,
 };
 use crate::scene::SceneGraph;
+use crate::text::{TextRenderer, TextVertex};
 use std::sync::Arc;
 
 const SHAPE_SHADER: &str = include_str!("shaders/shape.wgsl");
@@ -26,10 +27,12 @@ pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    camera_bind_group_layout: wgpu::BindGroupLayout,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     vertex_capacity: usize,
     index_capacity: usize,
+    text_renderer: Option<TextRenderer>,
 }
 
 impl Renderer {
@@ -209,6 +212,14 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        // Create text renderer
+        let text_renderer = TextRenderer::new(
+            device.clone(),
+            queue.clone(),
+            format,
+            &bind_group_layout,
+        );
+
         log::info!("Renderer initialized: {}x{}, format: {:?}", width, height, format);
 
         Ok(Self {
@@ -220,10 +231,12 @@ impl Renderer {
             pipeline,
             camera_buffer,
             camera_bind_group,
+            camera_bind_group_layout: bind_group_layout,
             vertex_buffer,
             index_buffer,
             vertex_capacity: INITIAL_VERTEX_CAPACITY,
             index_capacity: INITIAL_INDEX_CAPACITY,
+            text_renderer: Some(text_renderer),
         })
     }
 
@@ -254,7 +267,10 @@ impl Renderer {
         // Build vertex and index data from ECS entities
         let (vertices, indices, objects_rendered) = self.build_geometry(world);
 
-        // Upload geometry data if we have any
+        // Build text geometry
+        let (text_vertices, text_indices, text_count) = self.build_text_geometry(world);
+
+        // Upload shape geometry data if we have any
         let num_indices = indices.len() as u32;
         if !vertices.is_empty() {
             // Resize buffers if needed
@@ -300,6 +316,8 @@ impl Renderer {
             label: Some("Render Encoder"),
         });
 
+        let mut draw_calls = 0u32;
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -321,12 +339,27 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
+            // Render shapes
             if num_indices > 0 {
                 render_pass.set_pipeline(&self.pipeline);
                 render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..num_indices, 0, 0..1);
+                draw_calls += 1;
+            }
+
+            // Render text
+            if !text_indices.is_empty() {
+                if let Some(text_renderer) = &mut self.text_renderer {
+                    text_renderer.render(
+                        &mut render_pass,
+                        &text_vertices,
+                        &text_indices,
+                        &self.camera_bind_group,
+                    );
+                    draw_calls += 1;
+                }
             }
         }
 
@@ -335,8 +368,8 @@ impl Renderer {
 
         RenderStats {
             frame_time: 0.0,
-            draw_calls: if num_indices > 0 { 1 } else { 0 },
-            objects_rendered,
+            draw_calls,
+            objects_rendered: objects_rendered + text_count,
             objects_culled: 0,
         }
     }
@@ -425,11 +458,60 @@ impl Renderer {
                         objects_rendered += 1;
                     }
                 }
+                // Text is handled separately
                 _ => {}
             }
         }
 
         (vertices, indices, objects_rendered)
+    }
+
+    /// Build text geometry from ECS entities
+    fn build_text_geometry(&self, world: &mut World) -> (Vec<TextVertex>, Vec<u16>, u32) {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let mut text_count = 0u32;
+
+        let text_renderer = match &self.text_renderer {
+            Some(tr) => tr,
+            None => return (vertices, indices, 0),
+        };
+
+        // Query text entities
+        let mut text_entities: Vec<_> = world
+            .query_filtered::<(
+                &TransformComponent,
+                &ZIndexComponent,
+                &VisibilityComponent,
+                &TextComponent,
+            ), With<Renderable>>()
+            .iter(world)
+            .filter(|(_, _, vis, _)| vis.visible)
+            .collect();
+
+        // Sort by z-index
+        text_entities.sort_by(|a, b| a.1.0.cmp(&b.1.0));
+
+        for (transform, _z_index, _visibility, text) in text_entities {
+            let color = [text.fill.r, text.fill.g, text.fill.b, text.fill.a];
+
+            let (text_verts, text_indices) = text_renderer.generate_text_geometry(
+                &text.content,
+                0.0, // Text starts at transform origin
+                0.0,
+                text.font_size as f32,
+                color,
+                &transform.world,
+            );
+
+            // Offset indices for batch rendering
+            let base_vertex = vertices.len() as u16;
+            vertices.extend(text_verts);
+            indices.extend(text_indices.iter().map(|i| i + base_vertex));
+            text_count += 1;
+        }
+
+        (vertices, indices, text_count)
     }
 
     /// Add rectangle vertices and indices
