@@ -1,9 +1,11 @@
 //! ECS module - Entity Component System for canvas objects using bevy_ecs.
 
 mod components;
+mod hierarchy;
 mod systems;
 
 pub use components::*;
+pub use hierarchy::*;
 pub use systems::*;
 
 use bevy_ecs::prelude::*;

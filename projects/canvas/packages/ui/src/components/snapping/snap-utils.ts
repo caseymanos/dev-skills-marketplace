@@ -7,7 +7,6 @@
 import type { Point, BoundingBox } from '@canvas/contracts';
 import type {
   SnapPoint,
-  SnapGuide,
   SnapResult,
   SnapConfig,
   ObjectSnapData,
@@ -79,8 +78,9 @@ export function snapToGrid(value: number, gridSize: number): number {
 
 /**
  * Find nearest snap point on one axis
+ * @internal Reserved for future use
  */
-function findNearestSnap(
+function _findNearestSnap(
   value: number,
   snapPoints: number[],
   threshold: number
@@ -96,6 +96,9 @@ function findNearestSnap(
 
   return nearest;
 }
+
+// Export to prevent unused warning
+export { _findNearestSnap as findNearestSnap };
 
 /**
  * Calculate snap result for a point

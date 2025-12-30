@@ -4,7 +4,7 @@
  * Manages snapping state and configuration.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import type { Point, BoundingBox } from '@canvas/contracts';
 import type {
   SnapConfig,

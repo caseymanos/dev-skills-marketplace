@@ -13,11 +13,10 @@ import { HANDLE_CURSORS } from './types';
  */
 export function calculateHandles(
   bounds: BoundingBox,
-  handleSize: number,
+  _handleSize: number,
   rotationDistance: number
 ): Handle[] {
   const { x, y, width, height } = bounds;
-  const halfHandle = handleSize / 2;
 
   // Center points of each edge
   const left = x;

@@ -30,6 +30,7 @@ export type {
 export {
   Toolbar,
   ToolButton,
+  HistoryButtons,
   TOOLS,
   getToolDefinition,
   getToolByShortcut,
@@ -39,6 +40,7 @@ export {
 export type {
   ToolbarProps,
   ToolButtonProps,
+  HistoryButtonsProps,
   ToolDefinition,
   ToolbarPosition,
   ToolbarStyle,

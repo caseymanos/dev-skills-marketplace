@@ -13,7 +13,7 @@ import { useDrawing } from '../hooks/useDrawing';
 import { SelectionOverlay } from './selection';
 import { DrawingPreview } from './drawing';
 import type { HandleType } from './selection';
-import type { CanvasCallbacks, CameraState, ToolType, BoundingBox } from '@canvas/contracts';
+import type { CanvasCallbacks, CameraState, ToolType } from '@canvas/contracts';
 import { screenToCanvas } from '../events';
 
 export interface CanvasProps {
@@ -73,11 +73,11 @@ export function Canvas({
         engine.setSelection(ids);
       }
     },
-    onTransform: (ids, bounds, rotation) => {
+    onTransform: (_ids, _bounds, _rotation) => {
       // Update objects in engine during transform (live preview)
       // This will be implemented when engine supports transform updates
     },
-    onTransformEnd: (ids, bounds, rotation) => {
+    onTransformEnd: (_ids, _bounds, _rotation) => {
       // Commit transform to engine
       // This will be implemented when engine supports transform commits
     },
@@ -116,7 +116,7 @@ export function Canvas({
           stroke: options.strokeColor,
           strokeWidth: options.strokeWidth,
           cornerRadius: 0,
-        });
+        } as Parameters<typeof engine.createObject>[0]);
       } else if (shapeTool === 'ellipse') {
         engine.createObject({
           type: 'ellipse',
@@ -130,7 +130,7 @@ export function Canvas({
           fill: options.fillColor,
           stroke: options.strokeColor,
           strokeWidth: options.strokeWidth,
-        });
+        } as Parameters<typeof engine.createObject>[0]);
       } else if (shapeTool === 'line') {
         engine.createObject({
           type: 'line',
@@ -143,7 +143,7 @@ export function Canvas({
           endPoint: { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
           stroke: options.strokeColor,
           strokeWidth: options.strokeWidth,
-        });
+        } as Parameters<typeof engine.createObject>[0]);
       }
     },
   });

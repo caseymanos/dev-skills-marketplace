@@ -108,4 +108,20 @@ impl Transform {
             y: self.b * point.x + self.d * point.y + self.ty,
         }
     }
+
+    pub fn inverse(&self) -> Transform {
+        let det = self.a * self.d - self.b * self.c;
+        if det.abs() < 1e-10 {
+            return Transform::IDENTITY;
+        }
+        let inv_det = 1.0 / det;
+        Transform {
+            a: self.d * inv_det,
+            b: -self.b * inv_det,
+            c: -self.c * inv_det,
+            d: self.a * inv_det,
+            tx: (self.c * self.ty - self.d * self.tx) * inv_det,
+            ty: (self.b * self.tx - self.a * self.ty) * inv_det,
+        }
+    }
 }

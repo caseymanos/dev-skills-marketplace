@@ -5,7 +5,7 @@
  * Positioned absolutely over the canvas.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import type { BoundingBox, CameraState } from '@canvas/contracts';
 import type { Handle, HandleType } from './types';
 import { SelectionBox } from './SelectionBox';
