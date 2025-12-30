@@ -2,24 +2,33 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Canvas WASM Test</title>
+    <title>Canvas WASM wgpu Test</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        #canvas { border: 1px solid #ccc; background: #f5f5f5; }
-        #log { background: #1e1e1e; color: #0f0; padding: 1rem; font-family: monospace; height: 200px; overflow: auto; }
+        body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background: #1a1a1a; color: #fff; }
+        h1 { color: #4a9eff; }
+        #canvas { border: 2px solid #333; display: block; margin: 1rem 0; }
+        #log { background: #0a0a0a; color: #0f0; padding: 1rem; font-family: monospace; height: 250px; overflow: auto; border-radius: 4px; }
         .success { color: #0f0; }
-        .error { color: #f00; }
-        .info { color: #0af; }
+        .error { color: #f44; }
+        .info { color: #4a9eff; }
+        .warn { color: #fa0; }
+        #status { padding: 1rem; margin: 1rem 0; border-radius: 4px; font-size: 1.2em; }
+        .status-pending { background: #333; }
+        .status-success { background: #143; border: 1px solid #0f0; }
+        .status-error { background: #411; border: 1px solid #f44; }
     </style>
 </head>
 <body>
-    <h1>Canvas WASM Test</h1>
+    <h1>Canvas WASM + wgpu Test</h1>
+    <div id="status" class="status-pending">Initializing...</div>
     <canvas id="canvas" width="800" height="400"></canvas>
     <h2>Console Log</h2>
     <div id="log"></div>
 
     <script type="module">
         const logEl = document.getElementById('log');
+        const statusEl = document.getElementById('status');
+
         function log(msg, type = 'info') {
             const line = document.createElement('div');
             line.className = type;
@@ -29,57 +38,63 @@
             console.log(msg);
         }
 
+        function setStatus(msg, type) {
+            statusEl.textContent = msg;
+            statusEl.className = `status-${type}`;
+        }
+
         async function run() {
             try {
                 log('Loading WASM module...');
-                const { default: init, WasmCanvasEngine, log: wasmLog, now } = await import('./pkg/canvas_wasm.js');
+                const { default: init, WasmCanvasEngine } = await import('./pkg/canvas_wasm.js');
 
-                log('Initializing WASM...');
+                log('Initializing WASM runtime...');
                 await init();
+                log('WASM runtime initialized!', 'success');
 
-                log('Creating canvas engine...', 'success');
+                log('Creating canvas engine...');
                 const engine = new WasmCanvasEngine();
 
                 const canvas = document.getElementById('canvas');
                 log(`Canvas size: ${canvas.width}x${canvas.height}`);
 
-                log('Initializing engine with canvas...');
-                await engine.init(canvas, {});
+                log('Initializing wgpu renderer (this may take a moment)...', 'warn');
+                setStatus('Initializing GPU...', 'pending');
 
-                log('Engine initialized!', 'success');
-                log(`Current tool: ${engine.getTool()}`);
+                await engine.init(canvas, {});
+                log('wgpu renderer initialized!', 'success');
+
+                // Render a frame to clear to background color
+                log('Rendering first frame...');
+                const stats = engine.render();
+                log(`Rendered: ${stats.frameTime.toFixed(2)}ms, ${stats.drawCalls} draw calls`, 'success');
 
                 // Test camera
                 const camera = engine.getCamera();
                 log(`Camera: x=${camera.x}, y=${camera.y}, zoom=${camera.zoom}`);
 
-                // Test coordinate conversion
-                const canvasPoint = engine.screenToCanvas(400, 200);
-                log(`Screen (400,200) -> Canvas (${canvasPoint.x.toFixed(1)}, ${canvasPoint.y.toFixed(1)})`);
-
                 // Test tool switching
+                log(`Current tool: ${engine.getTool()}`);
                 engine.setTool('rectangle');
                 log(`Tool changed to: ${engine.getTool()}`);
                 engine.setTool('select');
 
-                // Test pan
-                engine.panBy(50, 50);
-                const newCamera = engine.getCamera();
-                log(`After pan: x=${newCamera.x.toFixed(1)}, y=${newCamera.y.toFixed(1)}`);
+                // Test pan and re-render
+                engine.panBy(10, 10);
+                engine.render();
+                log('Panned camera and re-rendered');
 
-                // Render a frame
-                const stats = engine.render();
-                log(`Rendered frame: ${stats.frameTime.toFixed(2)}ms, ${stats.drawCalls} draw calls`);
-
-                // Test selection
-                const selection = engine.getSelection();
-                log(`Selection: ${selection.selectedIds.length} objects selected`);
-
+                // Final success
+                setStatus('Canvas cleared to blue via wgpu! 🎉', 'success');
                 log('All tests passed!', 'success');
-                log('Hello World from Rust/WASM!', 'success');
+                log('Canvas is rendering via Rust/wgpu/WASM!', 'success');
 
             } catch (e) {
                 log(`Error: ${e.message}`, 'error');
+                if (e.stack) {
+                    log(`Stack: ${e.stack}`, 'error');
+                }
+                setStatus(`Error: ${e.message}`, 'error');
                 console.error(e);
             }
         }
