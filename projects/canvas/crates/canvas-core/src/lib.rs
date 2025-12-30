@@ -2,6 +2,7 @@
 
 mod camera;
 mod engine;
+pub mod ecs;
 mod renderer;
 mod scene;
 mod tools;
@@ -9,6 +10,7 @@ mod input;
 
 pub use camera::*;
 pub use engine::*;
+pub use ecs::*;
 pub use renderer::*;
 pub use scene::*;
 pub use tools::*;
