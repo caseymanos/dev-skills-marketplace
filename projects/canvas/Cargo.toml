@@ -1,0 +1,77 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/canvas-core",
+    "crates/canvas-schema",
+    "crates/canvas-wasm",
+    "crates/sync-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Canvas Team"]
+license = "MIT"
+repository = "https://github.com/canvas/canvas"
+
+[workspace.dependencies]
+# Rendering
+wgpu = "23"
+bytemuck = { version = "1.14", features = ["derive"] }
+glam = { version = "0.29", features = ["serde"] }
+
+# ECS
+bevy_ecs = "0.15"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CRDT
+automerge = "0.5"
+
+# IDs
+ulid = "1.1"
+rand = "0.8"
+
+# Async
+tokio = { version = "1.41", features = ["full"] }
+futures = "0.3"
+
+# WASM
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "GpuDevice",
+    "GpuQueue",
+    "GpuCanvasContext",
+    "GpuTextureFormat",
+    "Performance",
+    "PointerEvent",
+    "MouseEvent",
+    "KeyboardEvent",
+    "WheelEvent",
+    "console",
+] }
+console_error_panic_hook = "0.1"
+
+# Logging
+log = "0.4"
+tracing = "0.1"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+[profile.release]
+lto = true
+opt-level = "s"
+
+[profile.dev]
+opt-level = 1
