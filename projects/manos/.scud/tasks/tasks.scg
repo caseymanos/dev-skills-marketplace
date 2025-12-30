@@ -1,0 +1,298 @@
+# SCUD Graph v1
+# Phase: main
+
+@meta {
+  name main
+  updated 2025-12-30T07:44:04.741504+00:00
+}
+
+@nodes
+# id | title | status | complexity | priority
+1 | Set up project skeleton and DI container | X | 13 | H
+1.1 | Set up Xcode project skeleton with module boundaries and build configuration | I | 5 | H
+1.2 | Implement dependency injection container with environment switching | P | 8 | H
+2 | Implement auth bootstrap and SwiftData persistence | X | 8 | H
+2.1 | Define SwiftData Entities and Implement Persistence | P | 5 | H
+2.2 | Implement Authentication Bootstrap | P | 8 | H
+3 | Build WebSocket client and streaming buffer | X | 8 | H
+3.1 | WebSocket Client Implementation | P | 8 | H
+3.2 | Streaming Buffer and UI Updates | P | 5 | H
+4 | Develop Live Trace and Logs screen | X | 8 | H
+4.1 | Implement Core Data Handling and Logic | P | 13 | H
+4.2 | Build UI Components and Integrations | P | 8 | H
+5 | Implement Swarm and Agent detail screens | X | 13 | H
+5.1 | Implement data models, caching, and real-time updates for Swarm and Agent data | P | 13 | H
+5.2 | Build UI screens for Swarm Health and Agent Detail | P | 5 | H
+6 | Add safe controls for swarms and agents | X | 13 | H
+6.1 | Implement Backend Controls API | P | 8 | H
+6.2 | Add UI Security and Controls | P | 8 | H
+7 | Create Approval Gates inbox and decision flow | X | 8 | H
+7.1 | Implement Approval Gates Data Models and Core Logic | P | 8 | H
+7.2 | Develop Approval Gates Inbox UI and Notification Integration | P | 8 | H
+8 | Build Context and Skill Health dashboards | X | 13 | M
+8.1 | Define Health Metrics Models and Schemas | P | 5 | H
+8.2 | Implement Health Dashboards UI and Logic | P | 13 | M
+9 | Integrate Terminal subsystem with tmux viewer | X | 13 | H
+9.1 | Implement Core SSH Transport and tmux Integration | P | 21 | H
+9.2 | Add User Flows and Error Handling | P | 8 | H
+10 | Establish testing and performance baseline | X | 13 | M
+10.1 | Implement Core Testing Suite | P | 8 | H
+10.2 | Establish Performance Baseline and UI Validation | P | 8 | H
+
+@edges
+# dependent -> dependency
+1.2 -> 1.1
+2 -> 1
+2.2 -> 2.1
+3 -> 2
+3.2 -> 3.1
+4 -> 3
+4.2 -> 4.1
+5 -> 2
+5 -> 3
+5.2 -> 5.1
+6 -> 2
+6 -> 5
+6.2 -> 6.1
+7 -> 2
+7.2 -> 7.1
+8 -> 2
+8.2 -> 8.1
+9 -> 2
+9 -> terminal:4
+9 -> terminal:5
+9 -> terminal:6
+9.1 -> terminal:4
+9.1 -> terminal:5
+9.1 -> terminal:6
+9.2 -> 9.1
+10 -> 1
+10 -> 3
+10 -> 4
+10 -> 5
+10 -> 6
+10 -> 7
+10 -> 8
+10 -> 9
+10.2 -> 10.1
+
+@parents
+# parent: subtasks...
+1: 1.1, 1.2
+2: 2.1, 2.2
+3: 3.1, 3.2
+4: 4.1, 4.2
+5: 5.1, 5.2
+6: 6.1, 6.2
+7: 7.1, 7.2
+8: 8.1, 8.2
+9: 9.1, 9.2
+10: 10.1, 10.2
+
+@details
+1 | description |
+  Create the Xcode project with proper module boundaries, enable Swift 6 strict concurrency, and implement a dependency injection container with environment switching for dev/staging/prod. This includes configuring build settings and ensuring a clean build with no warnings.
+1.1 | description |
+  Create the Xcode project with proper module boundaries, enable Swift 6 strict concurrency, configure build settings, and ensure a clean build with no warnings.
+1.2 | description |
+  Implement a dependency injection container that supports environment switching for dev, staging, and prod environments.
+2 | description |
+  Set up authentication with Keychain token storage, refresh flow, and error handling. Define SwiftData entities from the spec and implement basic CRUD operations with cache read paths for entities like Swarm, Agent, and Incident.
+2.1 | description |
+  Define SwiftData entities from the spec for Swarm, Agent, and Incident. Implement basic CRUD operations and set up cache read paths for these entities.
+2.2 | description |
+  Set up authentication with Keychain token storage, implement the refresh flow, and add error handling for authentication processes.
+3 | description |
+  Implement the WebSocket client with protocol versioning, auto-reconnect, ping/pong, and subscriptions. Create a bounded ring buffer for streaming events and add coalesced UI updates for batching every 100-250ms to handle up to 200 events/sec.
+3.1 | description |
+  Implement the WebSocket client with protocol versioning, auto-reconnect, ping/pong, and subscriptions. Ensure the client can establish connections and handle subscriptions independently.
+3.2 | description |
+  Create a bounded ring buffer for streaming events received from the WebSocket client and implement coalesced UI updates for batching every 100-250ms to handle up to 200 events/sec.
+4 | description |
+  Create the Live Trace & Logs screen with a timeline list, filters, search functionality, and 'Open in Web' deep link. Ensure filters apply instantly and rendering stays smooth under load with batching.
+4.1 | description |
+  Create data models and schemas for traces and logs. Implement core logic for fetching data with batching to ensure smooth rendering under load, including search functionality and filter application. Make filters apply instantly and handle large datasets efficiently.
+4.2 | description |
+  Develop the UI for the Live Trace & Logs screen, including the timeline list, filter controls, search input, and 'Open in Web' deep link functionality. Ensure the UI integrates with the core logic for instant filter updates and smooth performance.
+5 | description |
+  Build screens for Swarm Health with lists, metrics, and drilldowns, plus Agent Detail with status, events, and health rollups. Support offline viewing with cached state and WebSocket updates without full refresh.
+5.1 | description |
+  Define data structures for Swarm and Agent entities, implement offline caching for state persistence, and set up WebSocket connections for real-time updates without full page refreshes. Ensure data can be fetched and stored locally for offline viewing.
+5.2 | description |
+  Create the Swarm Health screen with lists, metrics, and drilldowns, and the Agent Detail screen with status, events, and health rollups. Integrate with the data layer for displaying cached and real-time data.
+6 | description |
+  Implement pause/resume/terminate controls for swarms and agents with API calls using idempotency via requestId. Add confirmation sheets, biometric gating for destructive actions, and rate limiting.
+6.1 | description |
+  Develop the API endpoints for pause, resume, and terminate actions on swarms and agents, incorporating idempotency using requestId. Ensure the core logic handles state changes reliably.
+6.2 | description |
+  Integrate confirmation sheets, biometric gating for destructive actions (like terminate), and rate limiting into the user interface. Connect to the backend API for full functionality.
+7 | description |
+  Develop the Approval Gates Inbox with pending gates list, detail view, and approve/reject actions requiring reasons. Ensure push notifications route correctly and decisions update state with audit receipts.
+7.1 | description |
+  Create database schemas and models for approval gates, pending lists, decisions, and audit receipts. Implement core business logic for handling approve/reject actions, updating states, and generating audit receipts. Ensure data integrity and state transitions.
+7.2 | description |
+  Build the inbox interface with pending gates list and detail view. Add approve/reject action buttons requiring reasons. Integrate push notifications to route correctly and ensure decisions trigger state updates via the core logic.
+8 | description |
+  Implement Context Health dashboard with token usage, redundancy warnings, and thresholds, plus Skill Health with success rates, latencies, and alerts. Allow adjusting thresholds and ensure alerts trigger pushes and deep links.
+8.1 | description |
+  Create data models and schemas for Context Health (token usage, redundancy warnings, thresholds) and Skill Health (success rates, latencies, alerts), including shared structures for thresholds, alerts, and their adjustments. Ensure models support independent testing for data integrity.
+8.2 | description |
+  Build the UI components for Context and Skill Health dashboards, implement core logic for displaying metrics, adjusting thresholds, and triggering alerts with pushes and deep links. Integrate with the defined models and ensure end-to-end functionality is testable.
+9 | description |
+  Implement SSH transport using SwiftNIO, SwiftTerm integration for tmux attach, host key TOFU verification, and Keychain key storage. Add biometric gating, connect/disconnect flows, and error handling for network/auth issues.
+9.1 | description |
+  Implement SSH transport using SwiftNIO, integrate SwiftTerm for tmux attach, add host key TOFU verification, and Keychain key storage.
+9.2 | description |
+  Implement biometric gating, connect/disconnect flows, and error handling for network and authentication issues.
+10 | description |
+  Create unit tests for parsing and buffering, integration tests for REST/WS, and UI smoke tests. Set up performance regression checks with signposts, ensure budgets are met, and achieve minimum test coverage with CI green.
+10.1 | description |
+  Create unit tests for parsing and buffering components, and integration tests for REST and WebSocket endpoints. Ensure these tests cover core functionality and can be run independently.
+10.2 | description |
+  Set up UI smoke tests, implement performance regression checks with signposts, verify that performance budgets are met, achieve minimum test coverage, and ensure CI pipeline is green.
+
+---
+
+# SCUD Graph v1
+# Phase: terminal
+
+@meta {
+  name terminal
+  updated 2025-12-30T07:44:04.741541+00:00
+}
+
+@nodes
+# id | title | status | complexity | priority
+1 | Define Core Abstractions (Models and Protocols) | P | 3 | H
+2 | Implement KeychainKeyStore for Private Key Storage | X | 5 | H
+2.1 | Implement Core KeychainKeyStore Class | P | 0 | H
+2.2 | Add Error Handling and Biometric Gating | P | 0 | H
+3 | Implement HostKeyStore for TOFU Verification | X | 5 | H
+3.1 | Implement Core HostKeyStore for TOFU Verification | P | 0 | H
+3.2 | Add Biometric-Gated Reset Trust Flow | P | 0 | H
+4 | Implement NIOSSHTransport for SSH Connections | X | 8 | H
+4.1 | Implement Basic SSH Connection and Authentication | P | 0 | H
+4.2 | Add Channel Management, PTY, and Exec Commands | P | 0 | H
+5 | Build SSHConnectionManager for Multiplexing and Reconnects | X | 8 | H
+5.1 | Implement Basic SSHConnectionManager Actor with Connection States and Multiplexing | P | 0 | H
+5.2 | Add Automatic Reconnection and Session Reattachment Logic | P | 0 | H
+6 | Develop TmuxClient for Session Management | X | 5 | H
+6.1 | Implement Core TmuxClient Methods | P | 0 | H
+6.2 | Add Session Discovery and Error Handling | P | 0 | H
+7 | Create SwiftTerm UI Wrapper | X | 5 | H
+7.1 | Implement UIViewRepresentable Wrapper for TerminalView | P | 0 | H
+7.2 | Add Keystroke Forwarding, UI Updates, and Hardware Shortcuts Support | P | 0 | M
+8 | Integrate Orchestrator for Session Lifecycle | X | 8 | H
+8.1 | Integrate TerminalOrchestrator with transport and tmux client | P | 0 | H
+8.2 | Add UI state updates and feedback for session lifecycle | P | 0 | H
+9 | Handle Background/Foreground Lifecycle | X | 5 | H
+9.1 | Implement Session Detachment on Background | P | 0 | H
+9.2 | Implement Session Reattachment on Foreground | P | 0 | H
+10 | Implement Error UX and Recovery Mapping | P | 3 | M
+11 | Build Test Harness and Integration Tests | X | 5 | H
+11.1 | Set up Dev Harness on macOS | P | 0 | H
+11.2 | Run End-to-End Integration Tests | P | 0 | H
+
+@edges
+# dependent -> dependency
+2 -> 1
+2.2 -> 2.1
+3 -> 2
+3.2 -> 3.1
+4 -> 1
+4 -> 2
+4 -> 3
+4.2 -> 4.1
+5 -> 4
+5.2 -> 5.1
+6 -> 4
+6.2 -> 6.1
+7 -> 1
+7.2 -> 7.1
+8 -> 5
+8 -> 6
+8 -> 7
+8.2 -> 8.1
+9 -> 8
+9.2 -> 9.1
+10 -> 8
+11 -> 4
+11 -> 5
+11 -> 6
+11 -> 7
+11 -> 8
+11 -> 9
+11 -> 10
+11.2 -> 11.1
+
+@parents
+# parent: subtasks...
+2: 2.1, 2.2
+3: 3.1, 3.2
+4: 4.1, 4.2
+5: 5.1, 5.2
+6: 6.1, 6.2
+7: 7.1, 7.2
+8: 8.1, 8.2
+9: 9.1, 9.2
+11: 11.1, 11.2
+
+@details
+1 | description |
+  Create the fundamental data models like TerminalSession, TerminalHostRef, TerminalError, and protocols like SSHTransport and TerminalOrchestrator. Ensure they are Codable for persistence and compile without errors. Acceptance: Codable roundtrip tests pass and models integrate seamlessly in unit tests.
+2 | description |
+  Build KeychainKeyStore to securely store and retrieve private key bytes using kSecClassGenericPassword with ThisDeviceOnly accessibility and optional biometric gating. Handle key retrieval failures gracefully. Acceptance: Keys persist across app relaunches and missing keys throw keyNotFound error.
+2.1 | description |
+  Create the KeychainKeyStore class with methods to store and retrieve private key bytes using kSecClassGenericPassword, setting ThisDeviceOnly accessibility. Implement basic store and retrieve functionality without error handling or biometric gating yet.
+2.2 | description |
+  Enhance the KeychainKeyStore to handle key retrieval failures gracefully (throw keyNotFound error for missing keys), add optional biometric gating, and ensure keys persist across app relaunches. Add tests to verify persistence and error scenarios.
+3 | description |
+  Develop HostKeyStore to store host key fingerprints on first connect and enforce TOFU by blocking mismatches. Include a biometric-gated reset trust flow to delete fingerprints. Acceptance: First connect stores fingerprint, mismatches are blocked, and reset trust requires biometrics.
+3.1 | description |
+  Develop the HostKeyStore class to store host key fingerprints on first connect, verify fingerprints on subsequent connections, and block connections with mismatched fingerprints. This includes defining the storage mechanism (e.g., secure local storage) and the core logic for TOFU enforcement.
+3.2 | description |
+  Implement the reset trust functionality that allows deletion of stored host key fingerprints, gated by biometric authentication (e.g., fingerprint or face ID). Integrate this into the HostKeyStore to provide a secure way to reset trust.
+4 | description |
+  Create NIOSSHTransport to handle SSH connections, channel management, PTY requests, and window size changes using SwiftNIO SSH. Integrate host key verification and authentication. Acceptance: Successfully connects to dev harness, opens exec channels, and runs commands like 'echo ping'.
+4.1 | description |
+  Set up NIOSSHTransport class to establish SSH connections using SwiftNIO SSH, integrate host key verification, and handle user authentication (e.g., password or key-based). Ensure the transport can connect to a dev harness server.
+4.2 | description |
+  Extend NIOSSHTransport to manage SSH channels, handle PTY requests, window size changes, and open exec channels to run commands like 'echo ping'. Integrate all features to meet acceptance criteria of connecting and executing commands.
+5 | description |
+  Implement SSHConnectionManager actor to manage connection states, multiplex channels, and handle automatic reconnections after network drops. Ensure it reattaches active sessions first. Acceptance: Network interruptions trigger reconnections and reattachments without data loss.
+5.1 | description |
+  Create the SSHConnectionManager actor to handle connection states (e.g., connected, disconnected) and multiplex multiple SSH channels. This includes establishing initial connections, managing channel creation, and basic state transitions. Ensure the actor can handle multiple channels simultaneously without data loss in normal operations.
+5.2 | description |
+  Extend the SSHConnectionManager to detect network interruptions, automatically reconnect, and prioritize reattaching active sessions first. Implement logic to handle reconnections without data loss, ensuring that ongoing channels are resumed seamlessly after drops.
+6 | description |
+  Construct TmuxClient to create, list, attach, kill, and discover tmux sessions on the remote host using exec channels. Implement session discovery for reconnects. Acceptance: Lists seed sessions like 'claude-seed1', attaches successfully, and handles session not found errors.
+6.1 | description |
+  Define the TmuxClient class and implement the core methods (create, list, attach, kill) using exec channels to interact with tmux on the remote host. Ensure basic functionality for session management operations.
+6.2 | description |
+  Implement session discovery for reconnects, including listing seed sessions like 'claude-seed1', successful attachment, and handling errors such as session not found. Integrate this into the TmuxClient to complete all acceptance criteria.
+7 | description |
+  Develop a UIViewRepresentable wrapper for TerminalView to integrate SwiftTerm with SwiftUI, forwarding keystrokes to channels and updating UI with received bytes. Support hardware keyboard shortcuts. Acceptance: Typing echoes in the terminal, and resizing syncs PTY window size.
+7.1 | description |
+  Create a UIViewRepresentable struct that wraps TerminalView, integrating it into SwiftUI with basic initialization and view lifecycle management. Ensure the wrapper can be instantiated and displayed in a SwiftUI view without additional functionality.
+7.2 | description |
+  Extend the wrapper to forward keystrokes to channels, update the UI with received bytes, support hardware keyboard shortcuts, ensure typing echoes in the terminal, and synchronize resizing with PTY window size.
+8 | description |
+  Glue together TerminalOrchestrator to manage session creation, attachment, detachment, and destruction, updating UI states accordingly. Wire it with transport and tmux client. Acceptance: Sessions can be created, attached, detached, and destroyed with correct state updates and UI feedback.
+8.1 | description |
+  Wire the TerminalOrchestrator to manage session creation, attachment, detachment, and destruction using the transport layer and tmux client. Ensure the core logic for these operations is functional and independently testable.
+8.2 | description |
+  Update UI states accordingly for session operations (create, attach, detach, destroy) and provide user feedback. This includes wiring the UI to reflect changes from the Orchestrator and ensuring visual feedback is correct.
+9 | description |
+  Implement app lifecycle handling to detach sessions on background and reconnect/reattach on foreground, prioritizing active sessions. Ensure remote tmux persists. Acceptance: Backgrounding for 60s followed by foregrounding reattaches sessions reliably without losing remote work.
+9.1 | description |
+  Detect app backgrounding event and implement logic to detach active tmux sessions, ensuring remote persistence without data loss.
+9.2 | description |
+  Detect app foregrounding event and implement logic to reconnect and reattach tmux sessions, prioritizing active sessions, with acceptance testing for 60s background period.
+10 | description |
+  Map TerminalError cases to user-friendly messages and CTAs, including blocking UI for host key mismatches and auto-retry for connection losses. Integrate biometric gates where required. Acceptance: Each error displays correct actionable message, and recovery flows work as specified.
+11 | description |
+  Set up the dev harness on macOS with tmux sessions and run end-to-end integration tests covering connection, attachment, reconnects, and errors. Acceptance: Full test suite passes locally, validating all acceptance gates from the spec.
+11.1 | description |
+  Install and configure the development harness on macOS, including setting up tmux sessions to support the test environment.
+11.2 | description |
+  Execute the full test suite locally, covering connection, attachment, reconnects, and errors, ensuring the test suite passes and validates all acceptance gates from the spec.
