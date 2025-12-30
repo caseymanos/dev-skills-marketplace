@@ -6,13 +6,11 @@
  */
 
 import type {
-  PointerEvent as WasmPointerEvent,
-  WheelEvent as WasmWheelEvent,
-  KeyboardEvent as WasmKeyboardEvent,
-  InputEvent,
+  WasmPointerEvent,
+  WasmWheelEvent,
+  WasmKeyboardEvent,
   Modifiers,
   CameraState,
-  Point,
 } from './types';
 
 import { screenToCanvas, getPointerPosition } from './coordinate-transform';

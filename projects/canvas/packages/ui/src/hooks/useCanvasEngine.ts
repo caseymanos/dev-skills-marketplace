@@ -39,7 +39,7 @@ export function useCanvasEngine(
   handleEvent: (event: InputEvent) => boolean;
   getCamera: () => CameraState;
 } {
-  const { callbacks, ...initOptions } = options;
+  const { callbacks } = options;
   const engineRef = useRef<CanvasEngine | null>(null);
 
   const [state, setState] = useState<CanvasEngineState>({
@@ -124,7 +124,7 @@ export function useCanvasEngine(
  * This will be replaced by the actual WASM engine from agent-core
  */
 function createMockEngine(
-  canvas: HTMLCanvasElement,
+  _canvas: HTMLCanvasElement,
   callbacks?: CanvasCallbacks
 ): CanvasEngine {
   let camera: CameraState = { x: 0, y: 0, zoom: 1 };

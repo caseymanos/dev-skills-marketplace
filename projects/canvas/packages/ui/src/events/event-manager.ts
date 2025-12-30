@@ -6,7 +6,6 @@
  */
 
 import type {
-  InputEvent,
   CameraState,
   EventHandler,
   EventManagerOptions,
@@ -40,7 +39,6 @@ export class EventManager {
 
   // Pointer tracking
   private activePointers: Map<number, Point> = new Map();
-  private pointerDownTime: number = 0;
   private lastClickTime: number = 0;
   private lastClickPoint: Point | null = null;
   private longPressTimer: number | null = null;
@@ -159,7 +157,6 @@ export class EventManager {
 
     const pos = getPointerPosition(event, this.canvas);
     this.activePointers.set(event.pointerId, pos);
-    this.pointerDownTime = Date.now();
     this.dragStartPoint = pos;
     this.isDragging = false;
 
@@ -168,13 +165,12 @@ export class EventManager {
       this.startLongPressTimer(event);
     }
 
-    // Check for double click
+    // Check for double click (unused for now but ready for gesture support)
     const now = Date.now();
     const timeSinceLastClick = now - this.lastClickTime;
-    const isDoubleClick =
-      timeSinceLastClick < this.options.doubleClickThreshold &&
+    void (timeSinceLastClick < this.options.doubleClickThreshold &&
       this.lastClickPoint &&
-      distance(pos, this.lastClickPoint) < this.options.dragThreshold;
+      distance(pos, this.lastClickPoint) < this.options.dragThreshold);
 
     // Convert and forward to WASM
     const wasmEvent = convertPointerEvent(
@@ -326,7 +322,7 @@ export class EventManager {
   /**
    * Start long press timer
    */
-  private startLongPressTimer(event: PointerEvent): void {
+  private startLongPressTimer(_event: PointerEvent): void {
     this.clearLongPressTimer();
     this.longPressTimer = window.setTimeout(() => {
       // Long press detected - could emit a gesture event here
