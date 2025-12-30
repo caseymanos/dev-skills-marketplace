@@ -92,3 +92,30 @@ export type {
   DropZoneState,
   ImagePlacementOptions,
 } from './media';
+
+// Export components
+export {
+  ExportDialog,
+  exportCanvas,
+  downloadExport,
+  exportToPng,
+  exportToSvg,
+  exportToPdf,
+  DEFAULT_EXPORT_OPTIONS,
+  QUALITY_SCALES,
+  FORMAT_MIME_TYPES,
+  FORMAT_EXTENSIONS,
+  generateExportFilename,
+  calculateExportBounds,
+} from './export';
+
+export type {
+  ExportDialogProps,
+  ExportFormat as CanvasExportFormat,
+  ExportQuality,
+  ExportScope,
+  ExportOptions,
+  ExportResult as CanvasExportResult,
+  ExportState,
+  ExportError,
+} from './export';
