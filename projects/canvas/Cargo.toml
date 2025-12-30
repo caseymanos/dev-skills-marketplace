@@ -34,6 +34,9 @@ automerge = "0.5"
 ulid = "1.1"
 rand = "0.8"
 
+# WASM-compatible random
+getrandom = { version = "0.2", features = ["js"] }
+
 # Async
 tokio = { version = "1.41", features = ["full"] }
 futures = "0.3"
@@ -75,3 +78,4 @@ opt-level = "s"
 
 [profile.dev]
 opt-level = 1
+

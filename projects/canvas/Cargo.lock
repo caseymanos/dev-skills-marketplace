@@ -424,6 +424,7 @@ dependencies = [
  "bevy_ecs",
  "bytemuck",
  "canvas-schema",
+ "getrandom 0.2.16",
  "glam",
  "log",
  "rand 0.8.5",
@@ -440,6 +441,7 @@ name = "canvas-schema"
 version = "0.1.0"
 dependencies = [
  "automerge",
+ "getrandom 0.2.16",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -454,6 +456,7 @@ dependencies = [
  "canvas-core",
  "canvas-schema",
  "console_error_panic_hook",
+ "getrandom 0.3.4",
  "js-sys",
  "log",
  "serde",
@@ -919,9 +922,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "wasip2",
+ "wasm-bindgen",
 ]
 
 [[package]]

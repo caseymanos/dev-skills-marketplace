@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Canvas WASM Test</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        #canvas { border: 1px solid #ccc; background: #f5f5f5; }
+        #log { background: #1e1e1e; color: #0f0; padding: 1rem; font-family: monospace; height: 200px; overflow: auto; }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .info { color: #0af; }
+    </style>
+</head>
+<body>
+    <h1>Canvas WASM Test</h1>
+    <canvas id="canvas" width="800" height="400"></canvas>
+    <h2>Console Log</h2>
+    <div id="log"></div>
+
+    <script type="module">
+        const logEl = document.getElementById('log');
+        function log(msg, type = 'info') {
+            const line = document.createElement('div');
+            line.className = type;
+            line.textContent = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(msg);
+        }
+
+        async function run() {
+            try {
+                log('Loading WASM module...');
+                const { default: init, WasmCanvasEngine, log: wasmLog, now } = await import('./pkg/canvas_wasm.js');
+
+                log('Initializing WASM...');
+                await init();
+
+                log('Creating canvas engine...', 'success');
+                const engine = new WasmCanvasEngine();
+
+                const canvas = document.getElementById('canvas');
+                log(`Canvas size: ${canvas.width}x${canvas.height}`);
+
+                log('Initializing engine with canvas...');
+                await engine.init(canvas, {});
+
+                log('Engine initialized!', 'success');
+                log(`Current tool: ${engine.getTool()}`);
+
+                // Test camera
+                const camera = engine.getCamera();
+                log(`Camera: x=${camera.x}, y=${camera.y}, zoom=${camera.zoom}`);
+
+                // Test coordinate conversion
+                const canvasPoint = engine.screenToCanvas(400, 200);
+                log(`Screen (400,200) -> Canvas (${canvasPoint.x.toFixed(1)}, ${canvasPoint.y.toFixed(1)})`);
+
+                // Test tool switching
+                engine.setTool('rectangle');
+                log(`Tool changed to: ${engine.getTool()}`);
+                engine.setTool('select');
+
+                // Test pan
+                engine.panBy(50, 50);
+                const newCamera = engine.getCamera();
+                log(`After pan: x=${newCamera.x.toFixed(1)}, y=${newCamera.y.toFixed(1)}`);
+
+                // Render a frame
+                const stats = engine.render();
+                log(`Rendered frame: ${stats.frameTime.toFixed(2)}ms, ${stats.drawCalls} draw calls`);
+
+                // Test selection
+                const selection = engine.getSelection();
+                log(`Selection: ${selection.selectedIds.length} objects selected`);
+
+                log('All tests passed!', 'success');
+                log('Hello World from Rust/WASM!', 'success');
+
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+                console.error(e);
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>
