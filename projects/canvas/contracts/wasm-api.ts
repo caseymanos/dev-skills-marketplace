@@ -124,12 +124,30 @@ export interface GroupObject extends BaseObject {
   children: ObjectId[];
 }
 
+export interface ImageObject extends BaseObject {
+  type: 'image';
+  /** Original image source URL or data URI */
+  src: string;
+  /** Display width in canvas units */
+  width: number;
+  /** Display height in canvas units */
+  height: number;
+  /** Original image dimensions for aspect ratio preservation */
+  naturalWidth: number;
+  naturalHeight: number;
+  /** Optional opacity (0-1, default 1) */
+  opacity?: number;
+  /** Optional fit mode */
+  fit?: 'fill' | 'contain' | 'cover';
+}
+
 export type CanvasObject =
   | RectangleObject
   | EllipseObject
   | LineObject
   | TextObject
-  | GroupObject;
+  | GroupObject
+  | ImageObject;
 
 // =============================================================================
 // INPUT EVENTS (UI -> WASM)
@@ -195,7 +213,8 @@ export type ToolType =
   | 'ellipse'
   | 'line'
   | 'pen'
-  | 'text';
+  | 'text'
+  | 'image';
 
 // =============================================================================
 // CAMERA STATE

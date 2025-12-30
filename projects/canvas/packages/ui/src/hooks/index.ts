@@ -14,3 +14,4 @@ export { useHistory, createCommand } from './useHistory';
 export type { Command, HistoryState } from './useHistory';
 export { useKeyboardShortcuts, COMMON_SHORTCUTS } from './useKeyboardShortcuts';
 export type { Shortcut } from './useKeyboardShortcuts';
+export { useImageUpload } from './useImageUpload';

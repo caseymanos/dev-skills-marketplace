@@ -14,7 +14,7 @@ export interface ToolDefinition {
   label: string;
   shortcut: string;
   icon: string; // Unicode or emoji for now, can be replaced with SVG
-  group: 'selection' | 'shapes' | 'drawing' | 'text';
+  group: 'selection' | 'shapes' | 'drawing' | 'text' | 'media';
 }
 
 /**
@@ -35,6 +35,9 @@ export const TOOLS: ToolDefinition[] = [
 
   // Text tools
   { type: 'text', label: 'Text', shortcut: 'T', icon: 'T', group: 'text' },
+
+  // Media tools
+  { type: 'image', label: 'Image', shortcut: 'I', icon: '🖼', group: 'media' },
 ];
 
 /**

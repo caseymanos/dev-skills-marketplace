@@ -71,3 +71,22 @@ export type {
   SnapConfig,
   ObjectSnapData,
 } from './snapping';
+
+// Media components
+export {
+  ImageLayer,
+  ImageDropZone,
+  calculateFitDimensions,
+  boundsToCenter,
+  SUPPORTED_IMAGE_TYPES,
+  DEFAULT_MAX_IMAGE_SIZE,
+} from './media';
+
+export type {
+  ImageFormat,
+  ImageLoadState,
+  LoadedImage,
+  ImageUploadResult,
+  DropZoneState,
+  ImagePlacementOptions,
+} from './media';

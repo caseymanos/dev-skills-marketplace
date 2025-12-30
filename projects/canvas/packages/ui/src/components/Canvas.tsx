@@ -10,10 +10,13 @@ import { useEventManager } from '../hooks/useEventManager';
 import { useCanvasEngine } from '../hooks/useCanvasEngine';
 import { useSelection } from '../hooks/useSelection';
 import { useDrawing } from '../hooks/useDrawing';
+import { useImageUpload } from '../hooks/useImageUpload';
 import { SelectionOverlay } from './selection';
 import { DrawingPreview } from './drawing';
+import { ImageLayer, ImageDropZone, calculateFitDimensions, DEFAULT_MAX_IMAGE_SIZE } from './media';
 import type { HandleType } from './selection';
-import type { CanvasCallbacks, CameraState, ToolType } from '@canvas/contracts';
+import type { ImageUploadResult } from './media';
+import type { CanvasCallbacks, CameraState, ToolType, ImageObject } from '@canvas/contracts';
 import { screenToCanvas } from '../events';
 
 export interface CanvasProps {
@@ -55,6 +58,9 @@ export function Canvas({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [cursor, setCursor] = useState('default');
   const [currentCamera, setCurrentCamera] = useState<CameraState>({ x: 0, y: 0, zoom: 1 });
+
+  // Image state (local storage until engine supports images)
+  const [images, setImages] = useState<ImageObject[]>([]);
 
   // Selection state
   const {
@@ -146,6 +152,69 @@ export function Canvas({
         } as Parameters<typeof engine.createObject>[0]);
       }
     },
+  });
+
+  // Handle image upload
+  const handleImageLoaded = useCallback(
+    (result: ImageUploadResult) => {
+      // Calculate fit dimensions
+      const { width: fitWidth, height: fitHeight } = calculateFitDimensions(
+        result.naturalWidth,
+        result.naturalHeight,
+        DEFAULT_MAX_IMAGE_SIZE.width,
+        DEFAULT_MAX_IMAGE_SIZE.height
+      );
+
+      // Calculate center position in canvas coordinates
+      const centerX = currentCamera.x + dimensions.width / 2 / currentCamera.zoom;
+      const centerY = currentCamera.y + dimensions.height / 2 / currentCamera.zoom;
+
+      // Create image object
+      const imageObject: ImageObject = {
+        id: result.id,
+        type: 'image',
+        src: result.src,
+        width: fitWidth,
+        height: fitHeight,
+        naturalWidth: result.naturalWidth,
+        naturalHeight: result.naturalHeight,
+        transform: {
+          a: 1,
+          b: 0,
+          c: 0,
+          d: 1,
+          tx: centerX - fitWidth / 2,
+          ty: centerY - fitHeight / 2,
+        },
+        parentId: null,
+        zIndex: images.length,
+        visible: true,
+        locked: false,
+      };
+
+      setImages((prev) => [...prev, imageObject]);
+
+      // Select the new image
+      setSelection([imageObject.id], {
+        x: imageObject.transform.tx,
+        y: imageObject.transform.ty,
+        width: imageObject.width,
+        height: imageObject.height,
+      });
+    },
+    [currentCamera, dimensions, images.length, setSelection]
+  );
+
+  // Image upload hook
+  const {
+    dropZone,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    fileInputRef,
+    openFilePicker,
+  } = useImageUpload({
+    onImageLoaded: handleImageLoaded,
   });
 
   // Merge callbacks with our handlers
@@ -304,6 +373,30 @@ export function Canvas({
 
   // Check if current tool is a drawing tool
   const isDrawingTool = tool === 'rectangle' || tool === 'ellipse' || tool === 'line';
+  const isImageTool = tool === 'image';
+
+  // Handle image tool click - opens file picker
+  useEffect(() => {
+    if (isImageTool) {
+      openFilePicker();
+    }
+  }, [isImageTool, openFilePicker]);
+
+  // Handle clicking on an image
+  const handleImageClick = useCallback(
+    (id: string, _event: React.PointerEvent) => {
+      const img = images.find((i) => i.id === id);
+      if (img) {
+        setSelection([id], {
+          x: img.transform.tx,
+          y: img.transform.ty,
+          width: img.width,
+          height: img.height,
+        });
+      }
+    },
+    [images, setSelection]
+  );
 
   // Handle canvas pointer events for drawing
   const handleCanvasPointerDown = useCallback(
@@ -425,20 +518,73 @@ export function Canvas({
     <div
       ref={containerRef}
       className={className}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       style={{
         position: 'relative',
         overflow: 'hidden',
         ...style,
       }}
     >
+      {/* Hidden file input for image uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const img = new Image();
+              img.onload = () => {
+                handleImageLoaded({
+                  id: `img_${Date.now()}`,
+                  src: reader.result as string,
+                  fileName: file.name,
+                  fileSize: file.size,
+                  mimeType: file.type as 'image/png',
+                  naturalWidth: img.naturalWidth,
+                  naturalHeight: img.naturalHeight,
+                });
+              };
+              img.src = reader.result as string;
+            };
+            reader.readAsDataURL(file);
+          }
+          e.target.value = '';
+        }}
+      />
+
       <canvas
         ref={canvasRef}
         onPointerDown={isDrawingTool ? handleCanvasPointerDown : undefined}
         style={{
           display: 'block',
-          cursor: isDrawingTool ? 'crosshair' : cursor,
+          cursor: isDrawingTool ? 'crosshair' : isImageTool ? 'copy' : cursor,
           touchAction: 'none',
         }}
+      />
+
+      {/* Image layer */}
+      {images.length > 0 && (
+        <ImageLayer
+          images={images}
+          camera={currentCamera}
+          width={dimensions.width}
+          height={dimensions.height}
+          selectedIds={selection.selectedIds}
+          onImageClick={handleImageClick}
+        />
+      )}
+
+      {/* Image drop zone overlay */}
+      <ImageDropZone
+        dropState={dropZone}
+        width={dimensions.width}
+        height={dimensions.height}
       />
 
       {/* Loading overlay */}
@@ -503,6 +649,7 @@ export function Canvas({
         >
           {dimensions.width}x{dimensions.height} | Tool: {tool}
           {selection.selectedIds.length > 0 && ` | Selected: ${selection.selectedIds.length}`}
+          {images.length > 0 && ` | Images: ${images.length}`}
         </div>
       )}
     </div>
