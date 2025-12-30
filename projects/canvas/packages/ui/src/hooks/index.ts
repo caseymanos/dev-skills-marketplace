@@ -7,3 +7,5 @@
 export { useEventManager } from './useEventManager';
 export { useCanvasEngine } from './useCanvasEngine';
 export { useSelection } from './useSelection';
+export { useDrawing, DEFAULT_DRAWING_OPTIONS } from './useDrawing';
+export type { DrawingState, DrawingOptions } from './useDrawing';

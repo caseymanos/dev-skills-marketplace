@@ -25,3 +25,25 @@ export type {
   SelectionBoxProps,
   SelectionOverlayProps,
 } from './selection';
+
+// Toolbar components
+export {
+  Toolbar,
+  ToolButton,
+  TOOLS,
+  getToolDefinition,
+  getToolByShortcut,
+  DEFAULT_TOOLBAR_STYLE,
+} from './toolbar';
+
+export type {
+  ToolbarProps,
+  ToolButtonProps,
+  ToolDefinition,
+  ToolbarPosition,
+  ToolbarStyle,
+} from './toolbar';
+
+// Drawing components
+export { DrawingPreview } from './drawing';
+export type { DrawingPreviewProps } from './drawing';

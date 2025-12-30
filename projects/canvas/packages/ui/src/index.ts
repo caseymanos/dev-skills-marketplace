@@ -5,7 +5,21 @@
  */
 
 // Components
-export { Canvas, SelectionBox, SelectionOverlay } from './components';
+export {
+  Canvas,
+  SelectionBox,
+  SelectionOverlay,
+  Toolbar,
+  ToolButton,
+  DrawingPreview,
+  TOOLS,
+  getToolDefinition,
+  getToolByShortcut,
+  DEFAULT_TOOLBAR_STYLE,
+  DEFAULT_SELECTION_STYLE,
+  HANDLE_CURSORS,
+} from './components';
+
 export type {
   CanvasProps,
   SelectionBoxProps,
@@ -16,10 +30,24 @@ export type {
   SelectionState,
   TransformState,
   SelectionStyle,
+  ToolbarProps,
+  ToolButtonProps,
+  ToolDefinition,
+  ToolbarPosition,
+  ToolbarStyle,
+  DrawingPreviewProps,
 } from './components';
 
 // Hooks
-export { useEventManager, useCanvasEngine, useSelection } from './hooks';
+export {
+  useEventManager,
+  useCanvasEngine,
+  useSelection,
+  useDrawing,
+  DEFAULT_DRAWING_OPTIONS,
+} from './hooks';
+
+export type { DrawingState, DrawingOptions } from './hooks';
 
 // Events
 export {

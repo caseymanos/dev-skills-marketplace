@@ -9,10 +9,12 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEventManager } from '../hooks/useEventManager';
 import { useCanvasEngine } from '../hooks/useCanvasEngine';
 import { useSelection } from '../hooks/useSelection';
+import { useDrawing } from '../hooks/useDrawing';
 import { SelectionOverlay } from './selection';
+import { DrawingPreview } from './drawing';
 import type { HandleType } from './selection';
 import type { CanvasCallbacks, CameraState, ToolType, BoundingBox } from '@canvas/contracts';
-import { screenToCanvas, getPointerPosition } from '../events';
+import { screenToCanvas } from '../events';
 
 export interface CanvasProps {
   /** CSS class name */
@@ -78,6 +80,71 @@ export function Canvas({
     onTransformEnd: (ids, bounds, rotation) => {
       // Commit transform to engine
       // This will be implemented when engine supports transform commits
+    },
+  });
+
+  // Drawing state
+  const {
+    state: drawingState,
+    startDrawing,
+    updateDrawing,
+    finishDrawing,
+    cancelDrawing,
+    setConstrained: setDrawingConstrained,
+  } = useDrawing({
+    onShapeCreated: (shapeTool, bounds, options) => {
+      if (!engine) return;
+
+      // Create shape based on tool type
+      const baseTransform = {
+        a: 1, b: 0, c: 0, d: 1,
+        tx: bounds.x,
+        ty: bounds.y,
+      };
+
+      if (shapeTool === 'rectangle') {
+        engine.createObject({
+          type: 'rectangle',
+          transform: baseTransform,
+          parentId: null,
+          zIndex: 0,
+          visible: true,
+          locked: false,
+          width: bounds.width,
+          height: bounds.height,
+          fill: options.fillColor,
+          stroke: options.strokeColor,
+          strokeWidth: options.strokeWidth,
+          cornerRadius: 0,
+        });
+      } else if (shapeTool === 'ellipse') {
+        engine.createObject({
+          type: 'ellipse',
+          transform: baseTransform,
+          parentId: null,
+          zIndex: 0,
+          visible: true,
+          locked: false,
+          radiusX: bounds.width / 2,
+          radiusY: bounds.height / 2,
+          fill: options.fillColor,
+          stroke: options.strokeColor,
+          strokeWidth: options.strokeWidth,
+        });
+      } else if (shapeTool === 'line') {
+        engine.createObject({
+          type: 'line',
+          transform: { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 },
+          parentId: null,
+          zIndex: 0,
+          visible: true,
+          locked: false,
+          startPoint: { x: bounds.x, y: bounds.y },
+          endPoint: { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+          stroke: options.strokeColor,
+          strokeWidth: options.strokeWidth,
+        });
+      }
     },
   });
 
@@ -201,21 +268,28 @@ export function Canvas({
     };
   }, [engine, isLoading, error]);
 
-  // Track shift key for aspect lock
+  // Track shift key for aspect lock and drawing constraint
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
         setAspectLocked(true);
+        setDrawingConstrained(true);
       }
-      if (e.key === 'Escape' && transform) {
-        endTransform();
-        clearSelection();
+      if (e.key === 'Escape') {
+        if (transform) {
+          endTransform();
+          clearSelection();
+        }
+        if (drawingState.isDrawing) {
+          cancelDrawing();
+        }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
         setAspectLocked(false);
+        setDrawingConstrained(false);
       }
     };
 
@@ -226,7 +300,51 @@ export function Canvas({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [transform, setAspectLocked, endTransform, clearSelection]);
+  }, [transform, drawingState.isDrawing, setAspectLocked, setDrawingConstrained, endTransform, clearSelection, cancelDrawing]);
+
+  // Check if current tool is a drawing tool
+  const isDrawingTool = tool === 'rectangle' || tool === 'ellipse' || tool === 'line';
+
+  // Handle canvas pointer events for drawing
+  const handleCanvasPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (!canvasRef.current || !isDrawingTool) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const localPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const canvasPos = screenToCanvas(localPos.x, localPos.y, currentCamera);
+
+      startDrawing(tool, canvasPos);
+    },
+    [isDrawingTool, tool, currentCamera, startDrawing]
+  );
+
+  // Global pointer move/up for drawing
+  useEffect(() => {
+    if (!drawingState.isDrawing) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!canvasRef.current) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const localPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const canvasPos = screenToCanvas(localPos.x, localPos.y, currentCamera);
+
+      updateDrawing(canvasPos);
+    };
+
+    const handlePointerUp = () => {
+      finishDrawing();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [drawingState.isDrawing, currentCamera, updateDrawing, finishDrawing]);
 
   // Handle selection overlay events
   const handleHandlePointerDown = useCallback(
@@ -315,9 +433,10 @@ export function Canvas({
     >
       <canvas
         ref={canvasRef}
+        onPointerDown={isDrawingTool ? handleCanvasPointerDown : undefined}
         style={{
           display: 'block',
-          cursor,
+          cursor: isDrawingTool ? 'crosshair' : cursor,
           touchAction: 'none',
         }}
       />
@@ -337,6 +456,17 @@ export function Canvas({
         >
           Loading canvas engine...
         </div>
+      )}
+
+      {/* Drawing preview */}
+      {drawingState.isDrawing && drawingState.previewBounds && drawingState.tool && (
+        <DrawingPreview
+          tool={drawingState.tool}
+          bounds={drawingState.previewBounds}
+          camera={currentCamera}
+          width={dimensions.width}
+          height={dimensions.height}
+        />
       )}
 
       {/* Selection overlay */}

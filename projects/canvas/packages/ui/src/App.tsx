@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Canvas } from './components';
+import { Canvas, Toolbar } from './components';
 import type { CameraState, ToolType } from '@canvas/contracts';
 
 export function App() {
@@ -16,15 +16,9 @@ export function App() {
     setCamera(newCamera);
   }, []);
 
-  const tools: { type: ToolType; label: string; shortcut: string }[] = [
-    { type: 'select', label: 'Select', shortcut: 'V' },
-    { type: 'pan', label: 'Pan', shortcut: 'H' },
-    { type: 'rectangle', label: 'Rectangle', shortcut: 'R' },
-    { type: 'ellipse', label: 'Ellipse', shortcut: 'O' },
-    { type: 'line', label: 'Line', shortcut: 'L' },
-    { type: 'pen', label: 'Pen', shortcut: 'P' },
-    { type: 'text', label: 'Text', shortcut: 'T' },
-  ];
+  const handleToolChange = useCallback((newTool: ToolType) => {
+    setTool(newTool);
+  }, []);
 
   return (
     <div
@@ -32,72 +26,69 @@ export function App() {
         width: '100vw',
         height: '100vh',
         display: 'flex',
-        flexDirection: 'column',
         backgroundColor: '#1a1a1a',
         color: '#fff',
       }}
     >
-      {/* Toolbar */}
-      <header
+      {/* Left sidebar with toolbar */}
+      <aside
         style={{
-          height: 48,
+          width: 56,
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          padding: '0 16px',
-          backgroundColor: '#2d2d2d',
-          borderBottom: '1px solid #404040',
-          gap: 8,
+          padding: '12px 0',
+          backgroundColor: '#252525',
+          borderRight: '1px solid #404040',
         }}
       >
-        <span style={{ fontWeight: 600, marginRight: 16 }}>Canvas</span>
+        <Toolbar
+          activeTool={tool}
+          onToolChange={handleToolChange}
+          position="left"
+          enableShortcuts
+        />
+      </aside>
 
-        {/* Tool buttons */}
-        <div style={{ display: 'flex', gap: 4 }}>
-          {tools.map(({ type, label, shortcut }) => (
-            <button
-              key={type}
-              onClick={() => setTool(type)}
-              title={`${label} (${shortcut})`}
-              style={{
-                padding: '6px 12px',
-                border: 'none',
-                borderRadius: 4,
-                cursor: 'pointer',
-                backgroundColor: tool === type ? '#4a9eff' : '#404040',
-                color: '#fff',
-                fontSize: 13,
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Camera info */}
-        <div
+      {/* Main content area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Top bar */}
+        <header
           style={{
-            fontSize: 12,
-            fontFamily: 'monospace',
-            color: '#888',
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 16px',
+            backgroundColor: '#2d2d2d',
+            borderBottom: '1px solid #404040',
           }}
         >
-          {Math.round(camera.zoom * 100)}% | ({Math.round(camera.x)},{' '}
-          {Math.round(camera.y)})
-        </div>
-      </header>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Collaborative Canvas</span>
 
-      {/* Canvas */}
-      <main style={{ flex: 1, position: 'relative' }}>
-        <Canvas
-          tool={tool}
-          onCameraChange={handleCameraChange}
-          debug
-          style={{ width: '100%', height: '100%' }}
-        />
-      </main>
+          {/* Camera info */}
+          <div
+            style={{
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: '#888',
+            }}
+          >
+            {Math.round(camera.zoom * 100)}% | ({Math.round(camera.x)},{' '}
+            {Math.round(camera.y)})
+          </div>
+        </header>
+
+        {/* Canvas */}
+        <main style={{ flex: 1, position: 'relative' }}>
+          <Canvas
+            tool={tool}
+            onCameraChange={handleCameraChange}
+            debug
+            style={{ width: '100%', height: '100%' }}
+          />
+        </main>
+      </div>
     </div>
   );
 }
