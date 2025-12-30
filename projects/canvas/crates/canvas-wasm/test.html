@@ -2,12 +2,12 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Canvas WASM wgpu Test</title>
+    <title>Canvas WASM Render Loop Test</title>
     <style>
         body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background: #1a1a1a; color: #fff; }
         h1 { color: #4a9eff; }
         #canvas { border: 2px solid #333; display: block; margin: 1rem 0; }
-        #log { background: #0a0a0a; color: #0f0; padding: 1rem; font-family: monospace; height: 250px; overflow: auto; border-radius: 4px; }
+        #log { background: #0a0a0a; color: #0f0; padding: 1rem; font-family: monospace; height: 200px; overflow: auto; border-radius: 4px; }
         .success { color: #0f0; }
         .error { color: #f44; }
         .info { color: #4a9eff; }
@@ -16,11 +16,13 @@
         .status-pending { background: #333; }
         .status-success { background: #143; border: 1px solid #0f0; }
         .status-error { background: #411; border: 1px solid #f44; }
+        #stats { font-family: monospace; margin: 1rem 0; padding: 0.5rem; background: #222; border-radius: 4px; }
     </style>
 </head>
 <body>
-    <h1>Canvas WASM + wgpu Test</h1>
+    <h1>Canvas WASM Render Loop Test</h1>
     <div id="status" class="status-pending">Initializing...</div>
+    <div id="stats">FPS: -- | Frame: -- | Objects: --</div>
     <canvas id="canvas" width="800" height="400"></canvas>
     <h2>Console Log</h2>
     <div id="log"></div>
@@ -28,6 +30,7 @@
     <script type="module">
         const logEl = document.getElementById('log');
         const statusEl = document.getElementById('status');
+        const statsEl = document.getElementById('stats');
 
         function log(msg, type = 'info') {
             const line = document.createElement('div');
@@ -58,36 +61,51 @@
                 const canvas = document.getElementById('canvas');
                 log(`Canvas size: ${canvas.width}x${canvas.height}`);
 
-                log('Initializing wgpu renderer (this may take a moment)...', 'warn');
+                log('Initializing wgpu renderer...', 'warn');
                 setStatus('Initializing GPU...', 'pending');
 
                 await engine.init(canvas, {});
                 log('wgpu renderer initialized!', 'success');
 
-                // Render a frame to clear to background color
-                log('Rendering first frame...');
-                const stats = engine.render();
-                log(`Rendered: ${stats.frameTime.toFixed(2)}ms, ${stats.drawCalls} draw calls`, 'success');
+                // Stats tracking
+                let frameCount = 0;
+                let lastTime = performance.now();
+                let fps = 0;
+
+                // Render loop
+                function renderLoop(timestamp) {
+                    frameCount++;
+
+                    // Calculate FPS every second
+                    const now = performance.now();
+                    if (now - lastTime >= 1000) {
+                        fps = Math.round(frameCount * 1000 / (now - lastTime));
+                        frameCount = 0;
+                        lastTime = now;
+                    }
+
+                    // Render frame
+                    const stats = engine.render();
+
+                    // Update stats display
+                    statsEl.textContent = `FPS: ${fps} | Frame Time: ${stats.frameTime.toFixed(2)}ms | Objects: ${stats.objectsRendered}`;
+
+                    // Continue loop
+                    requestAnimationFrame(renderLoop);
+                }
+
+                // Start render loop
+                log('Starting render loop...', 'success');
+                requestAnimationFrame(renderLoop);
 
                 // Test camera
                 const camera = engine.getCamera();
                 log(`Camera: x=${camera.x}, y=${camera.y}, zoom=${camera.zoom}`);
 
-                // Test tool switching
-                log(`Current tool: ${engine.getTool()}`);
-                engine.setTool('rectangle');
-                log(`Tool changed to: ${engine.getTool()}`);
-                engine.setTool('select');
-
-                // Test pan and re-render
-                engine.panBy(10, 10);
-                engine.render();
-                log('Panned camera and re-rendered');
-
                 // Final success
-                setStatus('Canvas cleared to blue via wgpu! 🎉', 'success');
-                log('All tests passed!', 'success');
-                log('Canvas is rendering via Rust/wgpu/WASM!', 'success');
+                setStatus('Rendering gradient rectangle via wgpu! 🎉', 'success');
+                log('Hard-coded rectangle should be visible on canvas', 'success');
+                log('Render loop running with requestAnimationFrame', 'success');
 
             } catch (e) {
                 log(`Error: ${e.message}`, 'error');
