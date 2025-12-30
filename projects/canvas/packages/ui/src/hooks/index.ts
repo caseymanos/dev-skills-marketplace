@@ -17,3 +17,18 @@ export type { Shortcut } from './useKeyboardShortcuts';
 export { useImageUpload } from './useImageUpload';
 export { useExport } from './useExport';
 export type { ExportFormat, ExportResult, UseExportOptions } from './useExport';
+
+// Optimization hooks
+export {
+  useStableCallback,
+  useDebouncedCallback,
+  useThrottledCallback,
+  useStabilizedCallback,
+} from './useOptimizedCallback';
+
+export { useVirtualization, useChunkedLoading } from './useVirtualization';
+export type {
+  VirtualItem,
+  VirtualizationOptions,
+  VirtualizationResult,
+} from './useVirtualization';
