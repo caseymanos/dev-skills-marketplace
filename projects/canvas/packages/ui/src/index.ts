@@ -12,12 +12,17 @@ export {
   Toolbar,
   ToolButton,
   DrawingPreview,
+  SnapGuides,
   TOOLS,
   getToolDefinition,
   getToolByShortcut,
   DEFAULT_TOOLBAR_STYLE,
   DEFAULT_SELECTION_STYLE,
   HANDLE_CURSORS,
+  DEFAULT_SNAP_CONFIG,
+  snapToGrid,
+  calculateSnap,
+  calculateBoundsSnap,
 } from './components';
 
 export type {
@@ -36,6 +41,12 @@ export type {
   ToolbarPosition,
   ToolbarStyle,
   DrawingPreviewProps,
+  SnapGuidesProps,
+  SnapPoint,
+  SnapGuide,
+  SnapResult,
+  SnapConfig,
+  ObjectSnapData,
 } from './components';
 
 // Hooks
@@ -44,6 +55,7 @@ export {
   useCanvasEngine,
   useSelection,
   useDrawing,
+  useSnapping,
   DEFAULT_DRAWING_OPTIONS,
 } from './hooks';
 

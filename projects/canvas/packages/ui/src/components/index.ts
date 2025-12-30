@@ -47,3 +47,25 @@ export type {
 // Drawing components
 export { DrawingPreview } from './drawing';
 export type { DrawingPreviewProps } from './drawing';
+
+// Snapping components
+export {
+  SnapGuides,
+  getSnapPointsFromBounds,
+  getDragSnapPoints,
+  snapToGrid,
+  calculateSnap,
+  calculateBoundsSnap,
+  DEFAULT_SNAP_CONFIG,
+} from './snapping';
+
+export type {
+  SnapGuidesProps,
+  GuideOrientation,
+  SnapPointType,
+  SnapPoint,
+  SnapGuide,
+  SnapResult,
+  SnapConfig,
+  ObjectSnapData,
+} from './snapping';
