@@ -36,10 +36,22 @@ impl Renderer {
             ..Default::default()
         });
 
-        // Create surface from canvas
-        let surface = instance
-            .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
-            .map_err(|e| format!("Failed to create surface: {}", e))?;
+        // Create surface from canvas using raw handles (wgpu 23 API)
+        let surface = {
+            use wasm_bindgen::JsCast;
+            let canvas_js: &wasm_bindgen::JsValue = canvas.as_ref();
+            let obj = std::ptr::NonNull::from(canvas_js).cast();
+            let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
+            let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
+
+            unsafe {
+                instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle,
+                    raw_window_handle,
+                })
+            }
+            .map_err(|e| format!("Failed to create surface: {}", e))?
+        };
 
         // Request adapter
         let adapter = instance

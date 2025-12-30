@@ -22,3 +22,5 @@ anyhow = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
 web-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+raw-window-handle = "0.6"
