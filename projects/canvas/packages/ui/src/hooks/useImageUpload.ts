@@ -42,7 +42,7 @@ interface UseImageUploadReturn {
   /** Handle drop */
   handleDrop: (event: React.DragEvent) => void;
   /** Reference to hidden file input */
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -100,7 +100,7 @@ export function useImageUpload(
     isValidDrop: false,
   });
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null!);
 
   const processFile = useCallback(
     async (file: File): Promise<ImageUploadResult | null> => {
