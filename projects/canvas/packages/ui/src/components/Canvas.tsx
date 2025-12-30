@@ -8,7 +8,11 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useEventManager } from '../hooks/useEventManager';
 import { useCanvasEngine } from '../hooks/useCanvasEngine';
-import type { CanvasCallbacks, CameraState, ToolType } from '@canvas/contracts';
+import { useSelection } from '../hooks/useSelection';
+import { SelectionOverlay } from './selection';
+import type { HandleType } from './selection';
+import type { CanvasCallbacks, CameraState, ToolType, BoundingBox } from '@canvas/contracts';
+import { screenToCanvas, getPointerPosition } from '../events';
 
 export interface CanvasProps {
   /** CSS class name */
@@ -48,6 +52,34 @@ export function Canvas({
 
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [cursor, setCursor] = useState('default');
+  const [currentCamera, setCurrentCamera] = useState<CameraState>({ x: 0, y: 0, zoom: 1 });
+
+  // Selection state
+  const {
+    selection,
+    transform,
+    handles,
+    setSelection,
+    clearSelection,
+    startTransform,
+    updateTransform,
+    endTransform,
+    setAspectLocked,
+  } = useSelection({
+    onSelectionChange: (ids) => {
+      if (engine) {
+        engine.setSelection(ids);
+      }
+    },
+    onTransform: (ids, bounds, rotation) => {
+      // Update objects in engine during transform (live preview)
+      // This will be implemented when engine supports transform updates
+    },
+    onTransformEnd: (ids, bounds, rotation) => {
+      // Commit transform to engine
+      // This will be implemented when engine supports transform commits
+    },
+  });
 
   // Merge callbacks with our handlers
   const mergedCallbacks: CanvasCallbacks = {
@@ -55,10 +87,15 @@ export function Canvas({
     onCameraChange: (camera) => {
       callbacks?.onCameraChange?.(camera);
       onCameraChange?.(camera);
+      setCurrentCamera(camera);
     },
     onCursorChange: (newCursor) => {
       callbacks?.onCursorChange?.(newCursor);
       setCursor(newCursor);
+    },
+    onSelectionChange: (selectionState) => {
+      callbacks?.onSelectionChange?.(selectionState);
+      setSelection(selectionState.selectedIds, selectionState.bounds);
     },
   };
 
@@ -164,6 +201,89 @@ export function Canvas({
     };
   }, [engine, isLoading, error]);
 
+  // Track shift key for aspect lock
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setAspectLocked(true);
+      }
+      if (e.key === 'Escape' && transform) {
+        endTransform();
+        clearSelection();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setAspectLocked(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [transform, setAspectLocked, endTransform, clearSelection]);
+
+  // Handle selection overlay events
+  const handleHandlePointerDown = useCallback(
+    (handleType: HandleType, event: React.PointerEvent) => {
+      if (!canvasRef.current || !selection.bounds) return;
+
+      const screenPos = { x: event.clientX, y: event.clientY };
+      const rect = canvasRef.current.getBoundingClientRect();
+      const localPos = { x: screenPos.x - rect.left, y: screenPos.y - rect.top };
+      const canvasPos = screenToCanvas(localPos.x, localPos.y, currentCamera);
+
+      startTransform(canvasPos, handleType);
+    },
+    [selection.bounds, currentCamera, startTransform]
+  );
+
+  const handleBoxPointerDown = useCallback(
+    (event: React.PointerEvent) => {
+      if (!canvasRef.current || !selection.bounds) return;
+
+      const screenPos = { x: event.clientX, y: event.clientY };
+      const rect = canvasRef.current.getBoundingClientRect();
+      const localPos = { x: screenPos.x - rect.left, y: screenPos.y - rect.top };
+      const canvasPos = screenToCanvas(localPos.x, localPos.y, currentCamera);
+
+      startTransform(canvasPos, null); // null = move operation
+    },
+    [selection.bounds, currentCamera, startTransform]
+  );
+
+  // Global pointer move/up for transform
+  useEffect(() => {
+    if (!transform) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!canvasRef.current) return;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      const localPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const canvasPos = screenToCanvas(localPos.x, localPos.y, currentCamera);
+
+      updateTransform(canvasPos);
+    };
+
+    const handlePointerUp = () => {
+      endTransform();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [transform, currentCamera, updateTransform, endTransform]);
+
   // Error state
   if (error) {
     return (
@@ -219,6 +339,22 @@ export function Canvas({
         </div>
       )}
 
+      {/* Selection overlay */}
+      {selection.bounds && tool === 'select' && (
+        <SelectionOverlay
+          bounds={selection.bounds}
+          rotation={selection.rotation}
+          handles={handles}
+          camera={currentCamera}
+          width={dimensions.width}
+          height={dimensions.height}
+          isTransforming={transform !== null}
+          activeHandle={transform?.activeHandle}
+          onHandlePointerDown={handleHandlePointerDown}
+          onBoxPointerDown={handleBoxPointerDown}
+        />
+      )}
+
       {/* Debug overlay */}
       {debug && !isLoading && (
         <div
@@ -236,6 +372,7 @@ export function Canvas({
           }}
         >
           {dimensions.width}x{dimensions.height} | Tool: {tool}
+          {selection.selectedIds.length > 0 && ` | Selected: ${selection.selectedIds.length}`}
         </div>
       )}
     </div>

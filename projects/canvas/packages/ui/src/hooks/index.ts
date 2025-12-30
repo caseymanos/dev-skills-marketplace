@@ -6,3 +6,4 @@
 
 export { useEventManager } from './useEventManager';
 export { useCanvasEngine } from './useCanvasEngine';
+export { useSelection } from './useSelection';

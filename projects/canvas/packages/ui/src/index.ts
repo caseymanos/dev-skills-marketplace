@@ -5,11 +5,21 @@
  */
 
 // Components
-export { Canvas } from './components';
-export type { CanvasProps } from './components';
+export { Canvas, SelectionBox, SelectionOverlay } from './components';
+export type {
+  CanvasProps,
+  SelectionBoxProps,
+  SelectionOverlayProps,
+  HandleType,
+  Handle,
+  TransformOperation,
+  SelectionState,
+  TransformState,
+  SelectionStyle,
+} from './components';
 
 // Hooks
-export { useEventManager, useCanvasEngine } from './hooks';
+export { useEventManager, useCanvasEngine, useSelection } from './hooks';
 
 // Events
 export {
